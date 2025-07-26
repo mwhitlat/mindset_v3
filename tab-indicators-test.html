@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tab Indicators Test - Mindset</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .indicator-demo {
+            display: flex;
+            gap: 20px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        .indicator {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        .indicator-info {
+            text-align: center;
+            margin-top: 10px;
+        }
+        .news-high { background: #4CAF50; }
+        .news-medium { background: #FF9800; }
+        .news-low { background: #F44336; }
+        .social { background: #9C27B0; }
+        .entertainment { background: #FF9800; }
+        .educational { background: #4CAF50; }
+        .professional { background: #607D8B; }
+        .unknown { background: #757575; }
+        .info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .warning { background: #fff3cd; color: #856404; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏷️ Tab Indicators Test</h1>
+        
+        <div class="info">
+            <h3>What are Tab Indicators?</h3>
+            <p>Tab indicators are small colored circles that appear on each webpage showing:</p>
+            <ul>
+                <li><strong>Content Type</strong> - News, social, entertainment, educational, etc.</li>
+                <li><strong>Credibility Level</strong> - Color-coded (green=high, orange=medium, red=low)</li>
+                <li><strong>Content Tone</strong> - Emoji indicators for uplifting vs cynical content</li>
+            </ul>
+            <p><strong>Look for the small colored circle in the top-right corner of this page!</strong></p>
+        </div>
+
+        <div class="test-section">
+            <h3>Indicator Examples</h3>
+            <p>Here are examples of what the tab indicators look like:</p>
+            
+            <div class="indicator-demo">
+                <div>
+                    <div class="indicator news-high">📰</div>
+                    <div class="indicator-info">High Credibility News</div>
+                </div>
+                <div>
+                    <div class="indicator news-medium">📰</div>
+                    <div class="indicator-info">Medium Credibility News</div>
+                </div>
+                <div>
+                    <div class="indicator news-low">📰</div>
+                    <div class="indicator-info">Low Credibility News</div>
+                </div>
+                <div>
+                    <div class="indicator social">👥</div>
+                    <div class="indicator-info">Social Media</div>
+                </div>
+                <div>
+                    <div class="indicator entertainment">🎭</div>
+                    <div class="indicator-info">Entertainment</div>
+                </div>
+                <div>
+                    <div class="indicator educational">🎓</div>
+                    <div class="indicator-info">Educational</div>
+                </div>
+                <div>
+                    <div class="indicator professional">💼</div>
+                    <div class="indicator-info">Professional</div>
+                </div>
+                <div>
+                    <div class="indicator unknown">🌐</div>
+                    <div class="indicator-info">Unknown/Other</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>Test Different Content Types</h3>
+            <p>Open these links in new tabs to see different indicators:</p>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 20px 0;">
+                <a href="https://www.bbc.com/news" target="_blank" style="padding: 10px; background: #e3f2fd; border-radius: 5px; text-decoration: none; color: #1976d2;">
+                    📰 BBC News (High Credibility)
+                </a>
+                <a href="https://www.facebook.com" target="_blank" style="padding: 10px; background: #e3f2fd; border-radius: 5px; text-decoration: none; color: #1976d2;">
+                    👥 Facebook (Social Media)
+                </a>
+                <a href="https://www.youtube.com" target="_blank" style="padding: 10px; background: #e3f2fd; border-radius: 5px; text-decoration: none; color: #1976d2;">
+                    🎭 YouTube (Entertainment)
+                </a>
+                <a href="https://www.khanacademy.org" target="_blank" style="padding: 10px; background: #e3f2fd; border-radius: 5px; text-decoration: none; color: #1976d2;">
+                    🎓 Khan Academy (Educational)
+                </a>
+                <a href="https://www.linkedin.com" target="_blank" style="padding: 10px; background: #e3f2fd; border-radius: 5px; text-decoration: none; color: #1976d2;">
+                    💼 LinkedIn (Professional)
+                </a>
+                <a href="https://www.reddit.com" target="_blank" style="padding: 10px; background: #e3f2fd; border-radius: 5px; text-decoration: none; color: #1976d2;">
+                    🌐 Reddit (Mixed Content)
+                </a>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>Indicator Features</h3>
+            <ul>
+                <li><strong>Hover Effect</strong> - Hover over the indicator to see detailed tooltip</li>
+                <li><strong>Pulse Animation</strong> - Low credibility sources pulse to draw attention</li>
+                <li><strong>Real-time Updates</strong> - Indicators update as you navigate between pages</li>
+                <li><strong>Non-intrusive</strong> - Small, subtle, doesn't interfere with browsing</li>
+                <li><strong>Customizable</strong> - Can be enabled/disabled in settings</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h3>Test Controls</h3>
+            <button onclick="testIndicator()" style="padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">
+                Test Current Indicator
+            </button>
+            <button onclick="toggleIndicator()" style="padding: 10px 20px; background: #FF9800; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                Toggle Indicator Visibility
+            </button>
+            <div id="testStatus"></div>
+        </div>
+
+        <div class="info">
+            <h3>How It Works</h3>
+            <ol>
+                <li><strong>Page Analysis</strong> - Extension analyzes each page for content type and credibility</li>
+                <li><strong>Visual Indicator</strong> - Small colored circle appears in top-right corner</li>
+                <li><strong>Real-time Updates</strong> - Indicator changes as you browse different sites</li>
+                <li><strong>Tooltip Information</strong> - Hover to see detailed breakdown</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        async function testIndicator() {
+            try {
+                const response = await chrome.runtime.sendMessage({
+                    action: 'analyzePageForTab',
+                    pageInfo: {
+                        domain: window.location.hostname,
+                        path: window.location.pathname,
+                        title: document.title,
+                        url: window.location.href
+                    }
+                });
+                
+                if (response && response.pageData) {
+                    showStatus(`Current page analyzed: ${response.pageData.category} content, credibility ${response.pageData.credibility.toFixed(1)}/10, tone: ${response.pageData.tone}`, 'success');
+                } else {
+                    showStatus('Failed to analyze current page', 'error');
+                }
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function toggleIndicator() {
+            try {
+                const response = await chrome.runtime.sendMessage({
+                    action: 'setTabIndicatorVisibility',
+                    visible: Math.random() > 0.5 // Random toggle for demo
+                });
+                
+                if (response && response.success) {
+                    showStatus('Indicator visibility toggled', 'success');
+                } else {
+                    showStatus('Failed to toggle indicator', 'error');
+                }
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('testStatus');
+            statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+
+        // Auto-test on page load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                testIndicator();
+            }, 2000);
+        });
+    </script>
+</body>
+</html> 

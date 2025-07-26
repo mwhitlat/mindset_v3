@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mindset - Settings</title>
+    <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+    <div class="settings-container">
+        <!-- Header -->
+        <header class="settings-header">
+            <div class="header-content">
+                <div class="logo">
+                    <span class="logo-icon">🧠</span>
+                    <span class="logo-text">Mindset</span>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-secondary" id="backBtn">
+                        <span class="btn-icon">←</span>
+                        Back to Dashboard
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="settings-main">
+            <!-- Settings Navigation -->
+            <nav class="settings-nav">
+                <button class="nav-item active" data-section="privacy">
+                    <span class="nav-icon">🔒</span>
+                    Privacy & Data
+                </button>
+                <button class="nav-item" data-section="tracking">
+                    <span class="nav-icon">📊</span>
+                    Tracking Preferences
+                </button>
+                <button class="nav-item" data-section="goals">
+                    <span class="nav-icon">🎯</span>
+                    Goals & Limits
+                </button>
+                <button class="nav-item" data-section="notifications">
+                    <span class="nav-icon">🔔</span>
+                    Notifications
+                </button>
+                <button class="nav-item" data-section="about">
+                    <span class="nav-icon">ℹ️</span>
+                    About
+                </button>
+            </nav>
+
+            <!-- Settings Content -->
+            <div class="settings-content">
+                <!-- Privacy & Data Section -->
+                <section class="settings-section active" id="privacy">
+                    <div class="section-header">
+                        <h2>Privacy & Data</h2>
+                        <p>Control how your data is stored and managed</p>
+                    </div>
+
+                    <div class="settings-group">
+                        <h3>Data Storage</h3>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Local Storage</h4>
+                                <p>All your data is stored locally on your device and never sent to external servers.</p>
+                            </div>
+                            <div class="setting-status">
+                                <span class="status-badge secure">Secure</span>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Data Retention</h4>
+                                <p>Choose how long to keep your browsing data</p>
+                            </div>
+                            <div class="setting-control">
+                                <select id="dataRetention" class="select-control">
+                                    <option value="7">1 week</option>
+                                    <option value="30" selected>1 month</option>
+                                    <option value="90">3 months</option>
+                                    <option value="365">1 year</option>
+                                    <option value="0">Keep forever</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <h3>Data Management</h3>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Export Data</h4>
+                                <p>Download all your data as a JSON file for backup or analysis</p>
+                            </div>
+                            <div class="setting-control">
+                                <button class="btn btn-secondary" id="exportDataBtn">
+                                    <span class="btn-icon">📤</span>
+                                    Export Data
+                                </button>
+                            </div>
+                        </div>
+
+                                            <div class="setting-item">
+                        <div class="setting-info">
+                            <h4>Data Encryption</h4>
+                            <p>Encrypt your data with a password for additional security</p>
+                        </div>
+                        <div class="setting-control">
+                            <label class="toggle">
+                                <input type="checkbox" id="dataEncryption">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="setting-item" id="encryptionPasswordItem" style="display: none;">
+                        <div class="setting-info">
+                            <h4>Encryption Password</h4>
+                            <p>Set a password to encrypt your data (required for encryption)</p>
+                        </div>
+                        <div class="setting-control">
+                            <input type="password" id="encryptionPassword" class="password-input" placeholder="Enter password">
+                            <button class="btn btn-secondary" id="setEncryptionPasswordBtn">
+                                <span class="btn-icon">🔐</span>
+                                Set Password
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="setting-item">
+                        <div class="setting-info">
+                            <h4>Clear All Data</h4>
+                            <p>Permanently delete all your browsing data and reset the extension</p>
+                        </div>
+                        <div class="setting-control">
+                            <button class="btn btn-danger" id="clearDataBtn">
+                                <span class="btn-icon">🗑️</span>
+                                Clear All Data
+                            </button>
+                        </div>
+                    </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <h3>Privacy Controls</h3>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Content Analysis</h4>
+                                <p>Analyze page content for tone and political bias (requires page access)</p>
+                            </div>
+                            <div class="setting-control">
+                                <label class="toggle">
+                                    <input type="checkbox" id="contentAnalysis" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Browser Status Indicators</h4>
+                                <p>Show content analysis in browser status bar (bottom of window)</p>
+                            </div>
+                            <div class="setting-control">
+                                <label class="toggle">
+                                    <input type="checkbox" id="tabIndicators" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Time Tracking</h4>
+                                <p>Track time spent on each website</p>
+                            </div>
+                            <div class="setting-control">
+                                <label class="toggle">
+                                    <input type="checkbox" id="timeTracking" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tracking Preferences Section -->
+                <section class="settings-section" id="tracking">
+                    <div class="settings-group">
+                        <h3>Tracking Schedule</h3>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Daily Time Limit</h4>
+                                <p>Set a daily limit for tracking (0 = no limit)</p>
+                            </div>
+                            <div class="setting-control">
+                                <input type="number" id="dailyTimeLimit" class="number-input" min="0" max="24" value="3" step="0.5">
+                                <span class="input-unit">hours</span>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Tracking Hours</h4>
+                                <p>Only track during specific hours</p>
+                            </div>
+                            <div class="setting-control">
+                                <div class="time-range">
+                                    <input type="time" id="trackingStart" class="time-input" value="06:00">
+                                    <span class="time-separator">to</span>
+                                    <input type="time" id="trackingEnd" class="time-input" value="23:00">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <h3>Content Categories</h3>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>News & Information</h4>
+                                <p>Track news websites and informational content</p>
+                            </div>
+                            <div class="setting-control">
+                                <label class="toggle">
+                                    <input type="checkbox" id="trackNews" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Social Media</h4>
+                                <p>Track social media platforms</p>
+                            </div>
+                            <div class="setting-control">
+                                <label class="toggle">
+                                    <input type="checkbox" id="trackSocial" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Entertainment</h4>
+                                <p>Track entertainment and leisure content</p>
+                            </div>
+                            <div class="setting-control">
+                                <label class="toggle">
+                                    <input type="checkbox" id="trackEntertainment" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Educational</h4>
+                                <p>Track educational and learning content</p>
+                            </div>
+                            <div class="setting-control">
+                                <label class="toggle">
+                                    <input type="checkbox" id="trackEducational" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Professional</h4>
+                                <p>Track work and professional content</p>
+                            </div>
+                            <div class="setting-control">
+                                <label class="toggle">
+                                    <input type="checkbox" id="trackProfessional" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Goals & Limits Section -->
+                <section class="settings-section" id="goals">
+                    <div class="settings-group">
+                        <h3>Content Balance Goals</h3>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Educational Content Goal</h4>
+                                <p>Target percentage of educational content in your digital diet</p>
+                            </div>
+                            <div class="setting-control">
+                                <input type="range" id="educationalGoal" class="range-input" min="0" max="50" value="20">
+                                <span class="range-value" id="educationalGoalValue">20%</span>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Source Diversity Goal</h4>
+                                <p>Target number of unique domains to visit weekly</p>
+                            </div>
+                            <div class="setting-control">
+                                <input type="number" id="sourceDiversityGoal" class="number-input" min="5" max="50" value="10">
+                                <span class="input-unit">domains</span>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Uplifting Content Goal</h4>
+                                <p>Target percentage of uplifting vs. cynical content</p>
+                            </div>
+                            <div class="setting-control">
+                                <input type="range" id="upliftingGoal" class="range-input" min="20" max="80" value="60">
+                                <span class="range-value" id="upliftingGoalValue">60%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <h3>Time Management</h3>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Weekly Report Day</h4>
+                                <p>Day of the week to generate your weekly report</p>
+                            </div>
+                            <div class="setting-control">
+                                <select id="weeklyReportDay" class="select-control">
+                                    <option value="0">Sunday</option>
+                                    <option value="1">Monday</option>
+                                    <option value="2">Tuesday</option>
+                                    <option value="3">Wednesday</option>
+                                    <option value="4">Thursday</option>
+                                    <option value="5">Friday</option>
+                                    <option value="6">Saturday</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Session Break Time</h4>
+                                <p>Minutes of inactivity before starting a new session</p>
+                            </div>
+                            <div class="setting-control">
+                                <input type="number" id="sessionBreakTime" class="number-input" min="5" max="60" value="15">
+                                <span class="input-unit">minutes</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Notifications Section -->
+                <section class="settings-section" id="notifications">
+                    <div class="settings-group">
+                        <h3>Real-Time Insights</h3>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Smart Notifications</h4>
+                                <p>Get real-time insights about your content consumption</p>
+                            </div>
+                            <div class="setting-control">
+                                <label class="toggle">
+                                    <input type="checkbox" id="smartNotifications" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Content Tone Alerts</h4>
+                                <p>Get notified when you're consuming cynical content</p>
+                            </div>
+                            <div class="setting-control">
+                                <label class="toggle">
+                                    <input type="checkbox" id="toneAlerts" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Credibility Warnings</h4>
+                                <p>Get warned about low-credibility sources</p>
+                            </div>
+                            <div class="setting-control">
+                                <label class="toggle">
+                                    <input type="checkbox" id="credibilityWarnings" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Echo Chamber Alerts</h4>
+                                <p>Get notified when you're visiting the same sources repeatedly</p>
+                            </div>
+                            <div class="setting-control">
+                                <label class="toggle">
+                                    <input type="checkbox" id="echoChamberAlerts" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Session Insights</h4>
+                                <p>Get insights about your browsing sessions every 30 minutes</p>
+                            </div>
+                            <div class="setting-control">
+                                <label class="toggle">
+                                    <input type="checkbox" id="sessionInsights" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <h3>Weekly Reports</h3>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Weekly Report Reminder</h4>
+                                <p>Get notified when your weekly report is ready</p>
+                            </div>
+                            <div class="setting-control">
+                                <label class="toggle">
+                                    <input type="checkbox" id="weeklyReportNotification" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Report Time</h4>
+                                <p>Time of day to receive your weekly report</p>
+                            </div>
+                            <div class="setting-control">
+                                <input type="time" id="reportTime" class="time-input" value="09:00">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <h3>Goal Reminders</h3>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Daily Goal Check-in</h4>
+                                <p>Daily reminder to check your digital diet goals</p>
+                            </div>
+                            <div class="setting-control">
+                                <label class="toggle">
+                                    <input type="checkbox" id="dailyGoalNotification">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Time Limit Warnings</h4>
+                                <p>Get notified when approaching your daily time limit</p>
+                            </div>
+                            <div class="setting-control">
+                                <label class="toggle">
+                                    <input type="checkbox" id="timeLimitNotification" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- About Section -->
+                <section class="settings-section" id="about">
+                    <div class="settings-group">
+                        <h3>About Mindset</h3>
+                        <div class="about-content">
+                            <div class="about-item">
+                                <h4>Version</h4>
+                                <p>1.0.0</p>
+                            </div>
+                            <div class="about-item">
+                                <h4>Description</h4>
+                                <p>Mindset helps you understand your digital consumption patterns and build healthier online habits through privacy-first tracking and personalized insights.</p>
+                            </div>
+                            <div class="about-item">
+                                <h4>Privacy</h4>
+                                <p>All data is processed locally on your device. We never collect, store, or transmit your personal information to external servers.</p>
+                            </div>
+                            <div class="about-item">
+                                <h4>Research Foundation</h4>
+                                <p>Built on research from Stanford, MIT, Oxford, WHO, and APA on digital wellbeing, attention economics, and habit formation.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <h3>Support & Feedback</h3>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Report an Issue</h4>
+                                <p>Help us improve by reporting bugs or suggesting features</p>
+                            </div>
+                            <div class="setting-control">
+                                <button class="btn btn-secondary" id="reportIssueBtn">
+                                    <span class="btn-icon">🐛</span>
+                                    Report Issue
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Feature Request</h4>
+                                <p>Suggest new features or improvements</p>
+                            </div>
+                            <div class="setting-control">
+                                <button class="btn btn-secondary" id="featureRequestBtn">
+                                    <span class="btn-icon">💡</span>
+                                    Request Feature
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="settings-footer">
+            <div class="footer-content">
+                <div class="privacy-note">
+                    <span class="privacy-icon">🔒</span>
+                    <span>Your privacy is our priority. All data stays on your device.</span>
+                </div>
+                <div class="footer-links">
+                    <a href="#" id="privacyPolicyLink">Privacy Policy</a>
+                    <a href="#" id="termsLink">Terms of Service</a>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div class="modal" id="confirmModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Confirm Action</h3>
+                <button class="modal-close" id="modalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="modalMessage">Are you sure you want to perform this action?</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="modalCancel">Cancel</button>
+                <button class="btn btn-danger" id="modalConfirm">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="settings.js"></script>
+</body>
+</html> 

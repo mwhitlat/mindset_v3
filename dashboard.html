@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mindset - Your Digital Diet Report</title>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header -->
+        <header class="dashboard-header">
+            <div class="header-content">
+                <div class="logo">
+                    <span class="logo-icon">🧠</span>
+                    <span class="logo-text">Mindset</span>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-secondary" id="exportBtn">
+                        <span class="btn-icon">📤</span>
+                        Export Report
+                    </button>
+                    <button class="btn btn-primary" id="shareBtn">
+                        <span class="btn-icon">📊</span>
+                        Share Report
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="dashboard-main">
+            <!-- Report Header -->
+            <section class="report-header">
+                <div class="report-title">
+                    <h1>Your Digital Diet Report</h1>
+                    <p class="report-subtitle" id="reportDate">Week of Dec 1-7, 2024</p>
+                </div>
+                <div class="report-summary">
+                    <div class="summary-item">
+                        <span class="summary-label">Tracking Since</span>
+                        <span class="summary-value" id="trackingStartDate">Dec 1, 2024</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Data Points</span>
+                        <span class="summary-value" id="totalDataPoints">0</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Score Overview -->
+            <section class="scores-overview">
+                <h2>Your Digital Health Scores</h2>
+                <div class="scores-grid">
+                    <div class="score-card primary">
+                        <div class="score-header">
+                            <span class="score-icon">🏆</span>
+                            <h3>Overall Health</h3>
+                        </div>
+                        <div class="score-value" id="overallHealthScore">-</div>
+                        <div class="score-stars" id="overallHealthStars"></div>
+                        <div class="score-description">Composite of all your digital consumption metrics</div>
+                    </div>
+                    
+                    <div class="score-card">
+                        <div class="score-header">
+                            <span class="score-icon">⚖️</span>
+                            <h3>Content Balance</h3>
+                        </div>
+                        <div class="score-value" id="contentBalanceScore">-</div>
+                        <div class="score-description">Distribution across content categories</div>
+                    </div>
+                    
+                    <div class="score-card">
+                        <div class="score-header">
+                            <span class="score-icon">🌐</span>
+                            <h3>Source Diversity</h3>
+                        </div>
+                        <div class="score-value" id="sourceDiversityScore">-</div>
+                        <div class="score-description">Variety of information sources</div>
+                    </div>
+                    
+                    <div class="score-card">
+                        <div class="score-header">
+                            <span class="score-icon">⏰</span>
+                            <h3>Time Management</h3>
+                        </div>
+                        <div class="score-value" id="timeManagementScore">-</div>
+                        <div class="score-description">Healthy usage patterns</div>
+                    </div>
+                    
+                    <div class="score-card">
+                        <div class="score-header">
+                            <span class="score-icon">🎭</span>
+                            <h3>Content Tone</h3>
+                        </div>
+                        <div class="score-value" id="contentToneScore">-</div>
+                        <div class="score-description">Emotional impact of content</div>
+                    </div>
+                    
+                    <div class="score-card">
+                        <div class="score-header">
+                            <span class="score-icon">🎯</span>
+                            <h3>Political Balance</h3>
+                        </div>
+                        <div class="score-value" id="politicalBalanceScore">-</div>
+                        <div class="score-description">Ideological diversity</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Content Breakdown -->
+            <section class="content-breakdown">
+                <h2>Content Breakdown</h2>
+                <div class="breakdown-container">
+                    <div class="breakdown-chart">
+                        <div class="chart-bars" id="contentChart">
+                            <!-- Chart bars will be generated here -->
+                        </div>
+                        <div class="chart-legend">
+                            <div class="legend-item">
+                                <span class="legend-color news"></span>
+                                <span>News & Info</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="legend-color social"></span>
+                                <span>Social Media</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="legend-color entertainment"></span>
+                                <span>Entertainment</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="legend-color educational"></span>
+                                <span>Educational</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="legend-color professional"></span>
+                                <span>Professional</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="breakdown-stats">
+                        <div class="stat-card">
+                            <h4>Most Visited Category</h4>
+                            <div class="stat-value" id="topCategory">-</div>
+                        </div>
+                        <div class="stat-card">
+                            <h4>Category Balance</h4>
+                            <div class="stat-value" id="categoryBalance">-</div>
+                        </div>
+                        <div class="stat-card">
+                            <h4>Recommendation</h4>
+                            <div class="stat-value" id="categoryRecommendation">-</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Time Analysis -->
+            <section class="time-analysis">
+                <h2>Time Analysis</h2>
+                <div class="time-container">
+                    <div class="time-stats">
+                        <div class="time-stat">
+                            <h4>Total Time This Week</h4>
+                            <div class="time-value" id="totalTime">-</div>
+                        </div>
+                        <div class="time-stat">
+                            <h4>Daily Average</h4>
+                            <div class="time-value" id="dailyAverage">-</div>
+                        </div>
+                        <div class="time-stat">
+                            <h4>Longest Session</h4>
+                            <div class="time-value" id="longestSession">-</div>
+                        </div>
+                    </div>
+                    <div class="time-chart">
+                        <h4>Daily Usage Pattern</h4>
+                        <div class="daily-chart" id="dailyChart">
+                            <!-- Daily chart will be generated here -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Source Analysis -->
+            <section class="source-analysis">
+                <h2>Source Analysis</h2>
+                <div class="source-container">
+                    <div class="source-stats">
+                        <div class="source-stat">
+                            <h4>Unique Domains</h4>
+                            <div class="source-value" id="uniqueDomains">-</div>
+                        </div>
+                        <div class="source-stat">
+                            <h4>Average Credibility</h4>
+                            <div class="source-value" id="avgCredibility">-</div>
+                        </div>
+                        <div class="source-stat">
+                            <h4>Echo Chamber Risk</h4>
+                            <div class="source-value" id="echoChamberRisk">-</div>
+                        </div>
+                    </div>
+                    <div class="source-list">
+                        <h4>Top Sources</h4>
+                        <div class="source-items" id="topSources">
+                            <!-- Top sources will be listed here -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tone & Political Analysis -->
+            <section class="tone-political-analysis">
+                <div class="analysis-grid">
+                    <div class="analysis-card">
+                        <h3>Content Tone Analysis</h3>
+                        <div class="tone-breakdown">
+                            <div class="tone-item">
+                                <span class="tone-label">Cynical</span>
+                                <div class="tone-bar">
+                                    <div class="tone-fill cynical" id="cynicalBar"></div>
+                                </div>
+                                <span class="tone-percentage" id="cynicalPercentage">-</span>
+                            </div>
+                            <div class="tone-item">
+                                <span class="tone-label">Uplifting</span>
+                                <div class="tone-bar">
+                                    <div class="tone-fill uplifting" id="upliftingBar"></div>
+                                </div>
+                                <span class="tone-percentage" id="upliftingPercentage">-</span>
+                            </div>
+                            <div class="tone-item">
+                                <span class="tone-label">Neutral</span>
+                                <div class="tone-bar">
+                                    <div class="tone-fill neutral" id="neutralBar"></div>
+                                </div>
+                                <span class="tone-percentage" id="neutralPercentage">-</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="analysis-card">
+                        <h3>Political Balance</h3>
+                        <div class="political-breakdown">
+                            <div class="political-item">
+                                <span class="political-label">Liberal</span>
+                                <div class="political-bar">
+                                    <div class="political-fill liberal" id="liberalBar"></div>
+                                </div>
+                                <span class="political-percentage" id="liberalPercentage">-</span>
+                            </div>
+                            <div class="political-item">
+                                <span class="political-label">Conservative</span>
+                                <div class="political-bar">
+                                    <div class="political-fill conservative" id="conservativeBar"></div>
+                                </div>
+                                <span class="political-percentage" id="conservativePercentage">-</span>
+                            </div>
+                            <div class="political-item">
+                                <span class="political-label">Centrist</span>
+                                <div class="political-bar">
+                                    <div class="political-fill centrist" id="centristBar"></div>
+                                </div>
+                                <span class="political-percentage" id="centristPercentage">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Insights & Recommendations -->
+            <section class="insights-recommendations">
+                <h2>Insights & Recommendations</h2>
+                <div class="insights-container">
+                    <div class="insights-list" id="insightsList">
+                        <!-- Insights will be generated here -->
+                    </div>
+                    <div class="recommendations">
+                        <h3>This Week's Goals</h3>
+                        <div class="goals-list" id="goalsList">
+                            <!-- Goals will be generated here -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Shareable Report Card -->
+            <section class="shareable-report">
+                <h2>Share Your Report</h2>
+                <div class="share-card" id="shareCard">
+                    <div class="share-header">
+                        <span class="share-icon">📊</span>
+                        <h3>My Digital Diet Report</h3>
+                    </div>
+                    <div class="share-content">
+                        <div class="share-score">
+                            <span class="share-score-label">Overall Health</span>
+                            <span class="share-score-value" id="shareOverallHealth">-</span>
+                        </div>
+                        <div class="share-breakdown">
+                            <span class="share-breakdown-label">Content Breakdown:</span>
+                            <span class="share-breakdown-value" id="shareContentBreakdown">-</span>
+                        </div>
+                        <div class="share-achievement">
+                            <span class="share-achievement-text" id="shareAchievement">-</span>
+                        </div>
+                    </div>
+                    <div class="share-footer">
+                        <span class="share-footer-text">Generated by Mindset - Understand your digital diet</span>
+                    </div>
+                </div>
+                <div class="share-actions">
+                    <button class="btn btn-primary" id="downloadImageBtn">
+                        <span class="btn-icon">📷</span>
+                        Download as Image
+                    </button>
+                    <button class="btn btn-secondary" id="copyLinkBtn">
+                        <span class="btn-icon">🔗</span>
+                        Copy Link
+                    </button>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="dashboard-footer">
+            <div class="footer-content">
+                <div class="privacy-note">
+                    <span class="privacy-icon">🔒</span>
+                    <span>All data is processed locally and stays on your device</span>
+                </div>
+                <div class="footer-links">
+                    <a href="#" id="settingsLink">Settings</a>
+                    <a href="#" id="exportDataLink">Export Data</a>
+                    <a href="#" id="deleteDataLink">Delete Data</a>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+</html> 

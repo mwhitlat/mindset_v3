@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browser Status Indicator Test - Mindset</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 50px; /* Space for status bar */
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .status-demo {
+            background: linear-gradient(90deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.6) 100%);
+            color: white;
+            padding: 12px;
+            border-radius: 5px;
+            margin: 20px 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+            border-top: 2px solid #4CAF50;
+        }
+        .info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .warning { background: #fff3cd; color: #856404; }
+        .credibility-examples {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .credibility-card {
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+            color: white;
+            font-weight: bold;
+        }
+        .high { background: #4CAF50; }
+        .medium { background: #FF9800; }
+        .low { background: #F44336; }
+        .browser-integration {
+            background: #f8f9fa;
+            border: 2px dashed #dee2e6;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            margin: 30px 0;
+        }
+        .browser-integration h3 {
+            color: #495057;
+            margin-bottom: 15px;
+        }
+        .browser-integration p {
+            color: #6c757d;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌐 Browser Status Indicator Test</h1>
+        
+        <div class="info">
+            <h3>What are Browser Status Indicators?</h3>
+            <p>Browser status indicators appear at the <strong>bottom of the browser window</strong>, similar to how browsers show security status, connection info, or other native browser information:</p>
+            <ul>
+                <li><strong>Native Integration</strong> - Looks and feels like part of the browser</li>
+                <li><strong>Non-intrusive</strong> - Positioned at bottom, never blocks content</li>
+                <li><strong>Comprehensive Info</strong> - Shows content type, credibility, and tone</li>
+                <li><strong>Visual Feedback</strong> - Color-coded borders for quick credibility assessment</li>
+                <li><strong>Always Visible</strong> - Consistent location across all sites</li>
+            </ul>
+            <p><strong>Look for the status bar at the bottom of this browser window!</strong></p>
+        </div>
+
+        <div class="browser-integration">
+            <h3>🌐 Browser-Native Experience</h3>
+            <p>This indicator integrates seamlessly with your browser's native UI, appearing at the bottom of the window just like security status, connection info, or other browser elements.</p>
+            <p><strong>No floating elements, no content blocking, pure browser integration!</strong></p>
+        </div>
+
+        <div class="test-section">
+            <h3>Status Bar Example</h3>
+            <p>Here's what the browser status indicator looks like:</p>
+            
+            <div class="status-demo">
+                <span style="margin-right: 15px;">
+                    <span style="color: #64B5F6;">📄</span> News
+                </span>
+                <span style="margin-right: 15px;">
+                    <span style="color: #4CAF50;">🔍</span> High (8.5/10)
+                </span>
+                <span style="margin-right: 15px;">
+                    <span style="color: #9C27B0;">🏛️</span> 🔵 Liberal
+                </span>
+                <span>
+                    <span style="color: #FFB74D;">💭</span> 😊 Uplifting
+                </span>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>Political Bias Indicators</h3>
+            <p>The status bar now shows political bias for news sources:</p>
+            
+            <div class="credibility-examples">
+                <div class="credibility-card high">
+                    <h4>🔵 Liberal</h4>
+                    <p>NYT, CNN, NPR</p>
+                    <p>Left-leaning sources</p>
+                    <p>Progressive viewpoints</p>
+                </div>
+                <div class="credibility-card medium">
+                    <h4>🟡 Centrist</h4>
+                    <p>Reuters, BBC, AP</p>
+                    <p>Balanced reporting</p>
+                    <p>Fact-based news</p>
+                </div>
+                <div class="credibility-card low">
+                    <h4>🔴 Conservative</h4>
+                    <p>Fox News, Newsmax</p>
+                    <p>Right-leaning sources</p>
+                    <p>Traditional viewpoints</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>Credibility Levels</h3>
+            <p>The status bar uses color-coded borders to quickly show credibility:</p>
+            
+            <div class="credibility-examples">
+                <div class="credibility-card high">
+                    <h4>🟢 High Credibility</h4>
+                    <p>8.0+ Score</p>
+                    <p>Green border</p>
+                    <p>Trusted sources</p>
+                </div>
+                <div class="credibility-card medium">
+                    <h4>🟠 Medium Credibility</h4>
+                    <p>6.0-7.9 Score</p>
+                    <p>Orange border</p>
+                    <p>Mixed reliability</p>
+                </div>
+                <div class="credibility-card low">
+                    <h4>🔴 Low Credibility</h4>
+                    <p>Below 6.0</p>
+                    <p>Red border</p>
+                    <p>Fact-check recommended</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>Test Different Content Types</h3>
+            <p>Open these links in new tabs to see different status indicators:</p>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 20px 0;">
+                <a href="https://www.bbc.com/news" target="_blank" style="padding: 10px; background: #e3f2fd; border-radius: 5px; text-decoration: none; color: #1976d2;">
+                    📰 BBC News (High Credibility)
+                </a>
+                <a href="https://www.facebook.com" target="_blank" style="padding: 10px; background: #e3f2fd; border-radius: 5px; text-decoration: none; color: #1976d2;">
+                    👥 Facebook (Social Media)
+                </a>
+                <a href="https://www.youtube.com" target="_blank" style="padding: 10px; background: #e3f2fd; border-radius: 5px; text-decoration: none; color: #1976d2;">
+                    🎭 YouTube (Entertainment)
+                </a>
+                <a href="https://www.khanacademy.org" target="_blank" style="padding: 10px; background: #e3f2fd; border-radius: 5px; text-decoration: none; color: #1976d2;">
+                    🎓 Khan Academy (Educational)
+                </a>
+                <a href="https://www.linkedin.com" target="_blank" style="padding: 10px; background: #e3f2fd; border-radius: 5px; text-decoration: none; color: #1976d2;">
+                    💼 LinkedIn (Professional)
+                </a>
+                <a href="https://www.reddit.com" target="_blank" style="padding: 10px; background: #e3f2fd; border-radius: 5px; text-decoration: none; color: #1976d2;">
+                    🌐 Reddit (Mixed Content)
+                </a>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>Browser Status Indicator Features</h3>
+            <ul>
+                <li><strong>Native Browser Integration</strong> - Appears at bottom like other browser status elements</li>
+                <li><strong>Comprehensive Information</strong> - Shows content type, credibility score, and tone</li>
+                <li><strong>Visual Credibility Indicators</strong> - Color-coded borders (green/orange/red)</li>
+                <li><strong>Non-intrusive Design</strong> - Never blocks content or interferes with websites</li>
+                <li><strong>Professional Appearance</strong> - Matches browser's native UI design</li>
+                <li><strong>Real-time Updates</strong> - Updates as you navigate between pages</li>
+                <li><strong>Subtle Presence</strong> - Fades in after page load, doesn't distract</li>
+                <li><strong>Customizable</strong> - Can be enabled/disabled in settings</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h3>Test Controls</h3>
+            <button onclick="testIndicator()" style="padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">
+                Test Current Indicator
+            </button>
+            <button onclick="toggleIndicator()" style="padding: 10px 20px; background: #FF9800; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                Toggle Indicator Visibility
+            </button>
+            <div id="testStatus"></div>
+        </div>
+
+        <div class="info">
+            <h3>Advantages of Browser Status Integration</h3>
+            <ol>
+                <li><strong>True Native Experience</strong> - Feels like part of the browser, not an add-on</li>
+                <li><strong>Zero Content Interference</strong> - Positioned in browser chrome area</li>
+                <li><strong>Professional Appearance</strong> - Matches browser's design language</li>
+                <li><strong>Always Accessible</strong> - Consistent location, easy to find</li>
+                <li><strong>Comprehensive Information</strong> - Shows all key metrics in one place</li>
+                <li><strong>Visual Feedback</strong> - Color-coded borders for quick assessment</li>
+            </ol>
+        </div>
+
+        <div class="info">
+            <h3>How It Works</h3>
+            <ol>
+                <li><strong>Page Analysis</strong> - Extension analyzes each page for content type and credibility</li>
+                <li><strong>Status Bar Integration</strong> - Information appears in browser status area</li>
+                <li><strong>Real-time Updates</strong> - Status updates as you browse different sites</li>
+                <li><strong>Visual Indicators</strong> - Color-coded borders show credibility at a glance</li>
+                <li><strong>Comprehensive Display</strong> - Shows category, credibility score, and tone</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        async function testIndicator() {
+            try {
+                const response = await chrome.runtime.sendMessage({
+                    action: 'analyzePageForTab',
+                    pageInfo: {
+                        domain: window.location.hostname,
+                        path: window.location.pathname,
+                        title: document.title,
+                        url: window.location.href
+                    }
+                });
+                
+                if (response && response.pageData) {
+                    showStatus(`Current page analyzed: ${response.pageData.category} content, credibility ${response.pageData.credibility.toFixed(1)}/10, tone: ${response.pageData.tone}`, 'success');
+                } else {
+                    showStatus('Failed to analyze current page', 'error');
+                }
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function toggleIndicator() {
+            try {
+                const response = await chrome.runtime.sendMessage({
+                    action: 'setTabIndicatorVisibility',
+                    visible: Math.random() > 0.5 // Random toggle for demo
+                });
+                
+                if (response && response.success) {
+                    showStatus('Status indicator visibility toggled', 'success');
+                } else {
+                    showStatus('Failed to toggle status indicator', 'error');
+                }
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('testStatus');
+            statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+
+        // Auto-test on page load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                testIndicator();
+            }, 2000);
+        });
+    </script>
+</body>
+</html> 

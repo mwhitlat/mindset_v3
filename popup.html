@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mindset - Digital Diet Tracker</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="popup-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">
+                <span class="logo-icon">🧠</span>
+                <span class="logo-text">Mindset</span>
+            </div>
+            <div class="tracking-toggle">
+                <label class="switch">
+                    <input type="checkbox" id="trackingToggle" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="quick-stats">
+            <div class="stat-item">
+                <div class="stat-label">This Week</div>
+                <div class="stat-value" id="weeklyVisits">-</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Sites</div>
+                <div class="stat-value" id="uniqueDomains">-</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Hours</div>
+                <div class="stat-value" id="totalHours">-</div>
+            </div>
+        </div>
+
+        <!-- Main Scores -->
+        <div class="scores-section">
+            <div class="score-card primary">
+                <div class="score-label">Overall Health</div>
+                <div class="score-value" id="overallHealth">-</div>
+                <div class="score-stars" id="overallHealthStars"></div>
+            </div>
+            
+            <div class="score-row">
+                <div class="score-card">
+                    <div class="score-label">Content Balance</div>
+                    <div class="score-value" id="contentBalance">-</div>
+                </div>
+                <div class="score-card">
+                    <div class="score-label">Source Diversity</div>
+                    <div class="score-value" id="sourceDiversity">-</div>
+                </div>
+            </div>
+            
+            <div class="score-row">
+                <div class="score-card">
+                    <div class="score-label">Content Tone</div>
+                    <div class="score-value" id="contentTone">-</div>
+                </div>
+                <div class="score-card">
+                    <div class="score-label">Political Balance</div>
+                    <div class="score-value" id="politicalBalance">-</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Insights -->
+        <div class="insights-section">
+            <div class="insights-header">
+                <span class="insights-icon">💡</span>
+                <span>Quick Insights</span>
+            </div>
+            <div class="insights-list" id="insightsList">
+                <div class="insight-item loading">
+                    <div class="insight-text">Loading insights...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <button class="btn btn-primary" id="viewReportBtn">
+                <span class="btn-icon">📊</span>
+                View Full Report
+            </button>
+            <button class="btn btn-secondary" id="settingsBtn">
+                <span class="btn-icon">⚙️</span>
+                Settings
+            </button>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="privacy-note">
+                <span class="privacy-icon">🔒</span>
+                All data stays on your device
+            </div>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html> 
