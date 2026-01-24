@@ -11,6 +11,10 @@
     "scripting",
     "notifications"
   ],
+
+  "optional_permissions": [
+    "history"
+  ],
   
   "host_permissions": [
     "https://*/*",

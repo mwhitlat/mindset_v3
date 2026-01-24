@@ -873,6 +873,110 @@ body {
     margin-bottom: 20px;
 }
 
+/* Import History Banner */
+.import-history-banner {
+    background: linear-gradient(135deg, #ebf8ff 0%, #e9d8fd 100%);
+    border: 1px solid #b794f4;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+}
+
+.import-history-content {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.import-history-icon {
+    font-size: 32px;
+    flex-shrink: 0;
+}
+
+.import-history-text h4 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 8px;
+}
+
+.import-history-text p {
+    font-size: 14px;
+    color: #4a5568;
+    margin-bottom: 8px;
+    line-height: 1.5;
+}
+
+.import-history-text .privacy-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.7);
+    padding: 10px 12px;
+    border-radius: 6px;
+    margin-top: 12px;
+    font-size: 13px;
+}
+
+.import-history-text .privacy-note .privacy-icon {
+    flex-shrink: 0;
+}
+
+.import-history-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.import-history-actions .btn {
+    color: #4a5568;
+}
+
+.import-history-actions .btn-primary {
+    background: #667eea;
+    color: white;
+    border: none;
+}
+
+.import-history-actions .btn-primary:hover {
+    background: #5a67d8;
+}
+
+.import-history-actions .btn-secondary {
+    background: white;
+    border: 1px solid #e2e8f0;
+}
+
+/* Import Progress */
+.import-progress {
+    background: #f7fafc;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 24px;
+    text-align: center;
+}
+
+.import-progress-bar {
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 12px;
+}
+
+.import-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #667eea, #764ba2);
+    border-radius: 4px;
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+#importProgressText {
+    font-size: 14px;
+    color: #718096;
+    margin: 0;
+}
+
 .week-selector {
     display: flex;
     align-items: center;

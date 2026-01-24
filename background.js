@@ -760,7 +760,15 @@ class MindsetTracker {
         const report = this.generateWeeklyReport();
         sendResponse({ report });
         break;
-        
+
+      case 'importBrowserHistory':
+        this.importBrowserHistory(request.days || 90).then(result => {
+          sendResponse(result);
+        }).catch(error => {
+          sendResponse({ success: false, error: error.message });
+        });
+        break;
+
       default:
         sendResponse({ error: 'Unknown action' });
     }
@@ -785,6 +793,103 @@ class MindsetTracker {
       },
       insights: this.generateInsights(weekData)
     };
+  }
+
+  async importBrowserHistory(days = 90) {
+    try {
+      // Check if we have the history permission
+      const hasPermission = await chrome.permissions.contains({ permissions: ['history'] });
+      if (!hasPermission) {
+        return { success: false, error: 'History permission not granted' };
+      }
+
+      // Calculate time range
+      const endTime = Date.now();
+      const startTime = endTime - (days * 24 * 60 * 60 * 1000);
+
+      // Search browser history
+      const historyItems = await chrome.history.search({
+        text: '',
+        startTime: startTime,
+        endTime: endTime,
+        maxResults: 10000
+      });
+
+      let imported = 0;
+
+      for (const item of historyItems) {
+        // Skip chrome:// and extension pages
+        if (!item.url || item.url.startsWith('chrome://') || item.url.startsWith('chrome-extension://')) {
+          continue;
+        }
+
+        try {
+          const url = new URL(item.url);
+          const domain = this.sanitizeDomain(url.hostname);
+          const path = this.sanitizeText(url.pathname);
+          const title = this.sanitizeText(item.title || '');
+
+          // Create visit data
+          const visitData = {
+            domain: domain,
+            path: path,
+            title: title,
+            timestamp: item.lastVisitTime || Date.now(),
+            duration: 0,  // Unknown for historical data
+            category: this.categorizeContent(domain, path, title),
+            credibility: this.assessCredibility(domain),
+            politicalBias: this.assessPoliticalBias(domain),
+            tone: this.assessTone(title),
+            imported: true  // Mark as imported
+          };
+
+          // Determine which week this visit belongs to
+          const visitDate = new Date(visitData.timestamp);
+          const startOfWeek = new Date(visitDate);
+          startOfWeek.setDate(visitDate.getDate() - visitDate.getDay());
+          const weekKey = startOfWeek.toISOString().split('T')[0];
+
+          // Initialize week data if needed
+          if (!this.userData.weeklyData[weekKey]) {
+            this.userData.weeklyData[weekKey] = {
+              visits: [],
+              domains: new Set(),
+              categories: {},
+              totalTime: 0
+            };
+          }
+
+          // Check if this visit already exists (avoid duplicates)
+          const existingVisit = this.userData.weeklyData[weekKey].visits.find(
+            v => v.domain === visitData.domain && v.timestamp === visitData.timestamp
+          );
+
+          if (!existingVisit) {
+            this.userData.weeklyData[weekKey].visits.push(visitData);
+            this.userData.weeklyData[weekKey].domains.add(visitData.domain);
+            this.userData.weeklyData[weekKey].categories[visitData.category] =
+              (this.userData.weeklyData[weekKey].categories[visitData.category] || 0) + 1;
+            imported++;
+          }
+        } catch (e) {
+          // Skip invalid URLs
+          continue;
+        }
+      }
+
+      // Recalculate scores for all affected weeks
+      Object.keys(this.userData.weeklyData).forEach(weekKey => {
+        this.calculateScores(weekKey);
+      });
+
+      // Save the data
+      await this.saveTrackingState();
+
+      return { success: true, imported: imported };
+    } catch (error) {
+      console.error('Error importing browser history:', error);
+      return { success: false, error: error.message };
+    }
   }
 
   generateInsights(weekData) {
