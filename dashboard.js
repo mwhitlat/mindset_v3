@@ -106,6 +106,21 @@ class DashboardManager {
         this.sortVisitsTable(th.dataset.sort);
       }
     });
+
+    // Import history buttons
+    document.getElementById('importHistoryBtn').addEventListener('click', () => {
+      this.importBrowserHistory();
+    });
+
+    document.getElementById('showImportBtn').addEventListener('click', () => {
+      document.getElementById('importHistoryBanner').style.display = 'block';
+    });
+
+    document.getElementById('dismissImportBtn').addEventListener('click', () => {
+      document.getElementById('importHistoryBanner').style.display = 'none';
+      // Remember dismissal
+      localStorage.setItem('mindset_import_dismissed', 'true');
+    });
   }
 
   async loadData() {
@@ -148,6 +163,7 @@ class DashboardManager {
     this.updateHistoricalTrends();
     this.updateVisitsSection();
     this.updateShareableReport();
+    this.checkShowImportBanner();
   }
 
   updateReportHeader() {
@@ -1130,6 +1146,72 @@ class DashboardManager {
         th.classList.add(this.currentSortDirection === 'asc' ? 'sorted-asc' : 'sorted-desc');
       }
     });
+  }
+
+  // ==================== Import Browser History ====================
+
+  checkShowImportBanner() {
+    const dominated = localStorage.getItem('mindset_import_dismissed');
+    if (dominated) return;
+
+    // Show banner if user has less than 2 weeks of data
+    const weeks = this.getHistoricalWeeks(52);
+    if (weeks.length < 2) {
+      document.getElementById('importHistoryBanner').style.display = 'block';
+    }
+  }
+
+  async importBrowserHistory() {
+    // First, request the history permission
+    try {
+      const granted = await this.requestHistoryPermission();
+      if (!granted) {
+        alert('Permission denied. You can try again anytime by clicking "Import History".');
+        return;
+      }
+
+      // Show progress UI
+      document.getElementById('importHistoryBanner').style.display = 'none';
+      document.getElementById('importProgress').style.display = 'block';
+      this.updateImportProgress(0, 'Starting import...');
+
+      // Request history import from background script
+      const response = await this.sendMessage({
+        action: 'importBrowserHistory',
+        days: 90  // Import last 90 days
+      });
+
+      if (response.success) {
+        this.updateImportProgress(100, `Imported ${response.imported} visits!`);
+
+        // Reload data after short delay
+        setTimeout(async () => {
+          document.getElementById('importProgress').style.display = 'none';
+          await this.loadData();
+        }, 1500);
+      } else {
+        document.getElementById('importProgress').style.display = 'none';
+        alert('Import failed: ' + (response.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Import error:', error);
+      document.getElementById('importProgress').style.display = 'none';
+      alert('Import failed. Please try again.');
+    }
+  }
+
+  async requestHistoryPermission() {
+    return new Promise((resolve) => {
+      chrome.permissions.request(
+        { permissions: ['history'] },
+        (granted) => resolve(granted)
+      );
+    });
+  }
+
+  updateImportProgress(percent, text) {
+    document.getElementById('importProgressFill').style.width = `${percent}%`;
+    document.getElementById('importProgressText').textContent = text;
   }
 }
 

@@ -290,10 +290,41 @@
             <section class="history-section">
                 <h2>Trends Over Time</h2>
 
+                <!-- Import History Banner (shown when little/no data) -->
+                <div class="import-history-banner" id="importHistoryBanner" style="display: none;">
+                    <div class="import-history-content">
+                        <div class="import-history-icon">📥</div>
+                        <div class="import-history-text">
+                            <h4>Import Browser History</h4>
+                            <p>Want to see trends from before you installed Mindset? You can optionally import your browser history.</p>
+                            <p class="privacy-note"><span class="privacy-icon">🔒</span> <strong>Your data stays on your device.</strong> Mindset processes everything locally and never sends your browsing data anywhere.</p>
+                        </div>
+                    </div>
+                    <div class="import-history-actions">
+                        <button class="btn btn-primary" id="importHistoryBtn">
+                            <span class="btn-icon">📥</span>
+                            Import History
+                        </button>
+                        <button class="btn btn-secondary" id="dismissImportBtn">Not Now</button>
+                    </div>
+                </div>
+
+                <!-- Import Progress (shown during import) -->
+                <div class="import-progress" id="importProgress" style="display: none;">
+                    <div class="import-progress-bar">
+                        <div class="import-progress-fill" id="importProgressFill"></div>
+                    </div>
+                    <p id="importProgressText">Importing history...</p>
+                </div>
+
                 <!-- Week Selector -->
                 <div class="week-selector">
                     <button class="btn btn-secondary" id="prevWeeksBtn">Show More Weeks</button>
                     <span id="weekRangeLabel">Last 8 weeks</span>
+                    <button class="btn btn-secondary" id="showImportBtn" style="margin-left: auto;">
+                        <span class="btn-icon">📥</span>
+                        Import History
+                    </button>
                 </div>
 
                 <!-- Trend Chart -->
