@@ -39,9 +39,9 @@ class MindsetTracker {
         this.userData = result.userData || this.initializeUserData();
       }
       
-      // Add sample data for testing if no data exists
-      if (!this.userData.weeklyData || Object.keys(this.userData.weeklyData).length === 0) {
-        this.addSampleData();
+      // Initialize empty weekly data if none exists
+      if (!this.userData.weeklyData) {
+        this.userData.weeklyData = {};
       }
       
       // Start tracking if enabled
@@ -57,8 +57,7 @@ class MindsetTracker {
       // Fallback to default state
       this.isTracking = true;
       this.userData = this.initializeUserData();
-      this.addSampleData();
-      
+
       // Initialize badge with default score
       await this.updateExtensionBadge(7.0);
     }
@@ -113,9 +112,20 @@ class MindsetTracker {
   }
 
   addSampleData() {
-    const weekKey = this.getWeekKey();
-    this.userData.weeklyData[weekKey] = {
-      visits: [
+    // Generate sample data for 8 weeks to test historical trends
+    const now = new Date();
+
+    for (let weekOffset = 0; weekOffset < 8; weekOffset++) {
+      const weekDate = new Date(now);
+      weekDate.setDate(weekDate.getDate() - (weekOffset * 7));
+      const startOfWeek = new Date(weekDate.setDate(weekDate.getDate() - weekDate.getDay()));
+      const weekKey = startOfWeek.toISOString().split('T')[0];
+
+      // Vary the data slightly for each week to show trends
+      const variationFactor = 1 + (Math.sin(weekOffset * 0.8) * 0.3);
+      const baseTimestamp = startOfWeek.getTime();
+
+      const visits = [
         {
           domain: 'nytimes.com',
           path: '/article1',
@@ -123,9 +133,9 @@ class MindsetTracker {
           category: 'news',
           credibility: 9.5,
           politicalBias: 'liberal',
-          tone: 'uplifting',
-          duration: 15,
-          timestamp: Date.now() - 86400000
+          tone: weekOffset % 3 === 0 ? 'uplifting' : 'neutral',
+          duration: Math.floor(15 * variationFactor),
+          timestamp: baseTimestamp + 86400000
         },
         {
           domain: 'foxnews.com',
@@ -135,8 +145,8 @@ class MindsetTracker {
           credibility: 7.0,
           politicalBias: 'conservative',
           tone: 'neutral',
-          duration: 12,
-          timestamp: Date.now() - 172800000
+          duration: Math.floor(12 * variationFactor),
+          timestamp: baseTimestamp + 172800000
         },
         {
           domain: 'facebook.com',
@@ -145,9 +155,9 @@ class MindsetTracker {
           category: 'social',
           credibility: 5.0,
           politicalBias: 'unknown',
-          tone: 'neutral',
-          duration: 45,
-          timestamp: Date.now() - 259200000
+          tone: weekOffset % 2 === 0 ? 'neutral' : 'cynical',
+          duration: Math.floor(45 * variationFactor),
+          timestamp: baseTimestamp + 259200000
         },
         {
           domain: 'youtube.com',
@@ -157,8 +167,8 @@ class MindsetTracker {
           credibility: 6.5,
           politicalBias: 'unknown',
           tone: 'uplifting',
-          duration: 20,
-          timestamp: Date.now() - 345600000
+          duration: Math.floor(20 * variationFactor),
+          timestamp: baseTimestamp + 345600000
         },
         {
           domain: 'reddit.com',
@@ -168,21 +178,73 @@ class MindsetTracker {
           credibility: 5.5,
           politicalBias: 'unknown',
           tone: 'neutral',
-          duration: 18,
-          timestamp: Date.now() - 432000000
+          duration: Math.floor(18 * variationFactor),
+          timestamp: baseTimestamp + 432000000
         }
-      ],
-      domains: new Set(['nytimes.com', 'foxnews.com', 'facebook.com', 'youtube.com', 'reddit.com']),
-      categories: {
-        news: 2,
-        social: 1,
-        entertainment: 1,
-        educational: 1,
-        professional: 0
-      },
-      totalTime: 110
-    };
-    
+      ];
+
+      // Add some extra visits for variety in newer weeks
+      if (weekOffset < 4) {
+        visits.push({
+          domain: 'reuters.com',
+          path: '/world',
+          title: 'World News Update',
+          category: 'news',
+          credibility: 9.0,
+          politicalBias: 'centrist',
+          tone: 'neutral',
+          duration: 10,
+          timestamp: baseTimestamp + 518400000
+        });
+
+        if (weekOffset < 2) {
+          visits.push({
+            domain: 'coursera.org',
+            path: '/course',
+            title: 'Learning Python Programming',
+            category: 'educational',
+            credibility: 8.0,
+            politicalBias: 'unknown',
+            tone: 'uplifting',
+            duration: 30,
+            timestamp: baseTimestamp + 604800000
+          });
+        }
+      }
+
+      const categories = {};
+      visits.forEach(v => {
+        categories[v.category] = (categories[v.category] || 0) + 1;
+      });
+
+      const weekData = {
+        visits,
+        domains: new Set(visits.map(v => v.domain)),
+        categories,
+        totalTime: visits.reduce((sum, v) => sum + v.duration, 0)
+      };
+
+      // Calculate and store scores for this week
+      const scores = {
+        sourceDiversity: Math.min(weekData.domains.size / 10, 1) * 10,
+        contentBalance: 6.5 + (Math.sin(weekOffset * 0.5) * 1.5),
+        timeManagement: 7.0 + (Math.cos(weekOffset * 0.4) * 1.2),
+        credibility: 6.8 + (weekOffset * 0.2),
+        contentTone: 6.0 + (Math.sin(weekOffset * 0.6) * 1.8),
+        politicalBalance: 7.2 + (Math.cos(weekOffset * 0.3) * 0.8)
+      };
+      scores.overallHealth = Object.values(scores).reduce((sum, s) => sum + s, 0) / 6;
+
+      weekData.scores = scores;
+      this.userData.weeklyData[weekKey] = weekData;
+    }
+
+    // Set current scores to the most recent week
+    const currentWeekKey = this.getWeekKey();
+    if (this.userData.weeklyData[currentWeekKey]?.scores) {
+      this.userData.scores = { ...this.userData.weeklyData[currentWeekKey].scores };
+    }
+
     // Save the sample data
     this.saveTrackingState();
   }
@@ -492,6 +554,9 @@ class MindsetTracker {
     // Calculate overall health score
     scores.overallHealth = Object.values(scores).reduce((sum, score) => sum + score, 0) / Object.keys(scores).length;
 
+    // Store scores with the week data for historical tracking
+    this.userData.weeklyData[weekKey].scores = { ...scores };
+
     this.userData.scores = scores;
     chrome.storage.local.set({ userData: this.userData });
   }
@@ -662,7 +727,6 @@ class MindsetTracker {
         
       case 'clearAllData':
         this.userData = this.initializeUserData();
-        this.addSampleData();
         this.saveTrackingState();
         sendResponse({ success: true });
         break;

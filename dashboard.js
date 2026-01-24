@@ -3,6 +3,23 @@ class DashboardManager {
   constructor() {
     this.userData = null;
     this.currentWeekData = null;
+    this.historicalWeeksLimit = 8;
+    this.visitsPageSize = 25;
+    this.visitsCurrentPage = 0;
+    this.currentSortColumn = 'timestamp';
+    this.currentSortDirection = 'desc';
+    this.selectedWeekKey = null;
+    this.selectedCategory = 'all';
+    this.activeMetrics = ['overallHealth', 'credibility', 'contentTone', 'politicalBalance'];
+    this.metricColors = {
+      overallHealth: '#667eea',
+      credibility: '#48bb78',
+      contentTone: '#ed8936',
+      politicalBalance: '#9f7aea',
+      contentBalance: '#4299e1',
+      sourceDiversity: '#f56565',
+      timeManagement: '#38b2ac'
+    };
     this.init();
   }
 
@@ -47,6 +64,48 @@ class DashboardManager {
       e.preventDefault();
       this.deleteData();
     });
+
+    // Historical trends event listeners
+    document.getElementById('prevWeeksBtn').addEventListener('click', () => {
+      this.showMoreWeeks();
+    });
+
+    // Legend toggle for trend chart
+    document.getElementById('trendLegend').addEventListener('click', (e) => {
+      const legendItem = e.target.closest('.legend-item');
+      if (legendItem) {
+        const metric = legendItem.dataset.metric;
+        this.toggleMetric(metric, legendItem);
+      }
+    });
+
+    // Week selector for visits table
+    document.getElementById('weekSelect').addEventListener('change', (e) => {
+      this.selectedWeekKey = e.target.value;
+      this.visitsCurrentPage = 0;
+      this.renderVisitsTable();
+    });
+
+    // Category filter for visits table
+    document.getElementById('categoryFilter').addEventListener('change', (e) => {
+      this.selectedCategory = e.target.value;
+      this.visitsCurrentPage = 0;
+      this.renderVisitsTable();
+    });
+
+    // Load more visits button
+    document.getElementById('loadMoreVisitsBtn').addEventListener('click', () => {
+      this.visitsCurrentPage++;
+      this.renderVisitsTable(true);
+    });
+
+    // Table header sorting
+    document.getElementById('visitsTable').querySelector('thead').addEventListener('click', (e) => {
+      const th = e.target.closest('th');
+      if (th && th.dataset.sort) {
+        this.sortVisitsTable(th.dataset.sort);
+      }
+    });
   }
 
   async loadData() {
@@ -86,6 +145,8 @@ class DashboardManager {
     this.updateSourceAnalysis();
     this.updateTonePoliticalAnalysis();
     this.updateInsightsRecommendations();
+    this.updateHistoricalTrends();
+    this.updateVisitsSection();
     this.updateShareableReport();
   }
 
@@ -614,6 +675,460 @@ class DashboardManager {
           resolve(response);
         }
       });
+    });
+  }
+
+  // ==================== Historical Trends Methods ====================
+
+  getHistoricalWeeks(limit = 8) {
+    if (!this.userData || !this.userData.weeklyData) return [];
+    return Object.keys(this.userData.weeklyData)
+      .sort()
+      .slice(-limit);
+  }
+
+  calculateWeekScores(weekKey) {
+    const weekData = this.userData.weeklyData[weekKey];
+    if (!weekData) return null;
+
+    // If scores are already stored, return them
+    if (weekData.scores) {
+      return weekData.scores;
+    }
+
+    // Calculate scores from raw visit data
+    const visits = weekData.visits || [];
+    if (visits.length === 0) return null;
+
+    const scores = {};
+
+    // Source Diversity
+    const uniqueDomains = weekData.domains ? weekData.domains.size : new Set(visits.map(v => v.domain)).size;
+    scores.sourceDiversity = Math.min(uniqueDomains / 10, 1) * 10;
+
+    // Content Balance
+    const categories = weekData.categories || {};
+    const total = Object.values(categories).reduce((sum, count) => sum + count, 0);
+    if (total > 0) {
+      const ideal = { news: 0.3, entertainment: 0.25, professional: 0.2, educational: 0.15, other: 0.1 };
+      let deviation = 0;
+      Object.keys(ideal).forEach(cat => {
+        const actual = (categories[cat] || 0) / total;
+        deviation += Math.abs(actual - ideal[cat]);
+      });
+      scores.contentBalance = Math.max(0, 10 - deviation * 20);
+    } else {
+      scores.contentBalance = 5;
+    }
+
+    // Time Management
+    const totalHours = (weekData.totalTime || 0) / 60;
+    const avgDailyHours = totalHours / 7;
+    if (avgDailyHours >= 1 && avgDailyHours <= 3) {
+      scores.timeManagement = 10;
+    } else if (avgDailyHours < 1) {
+      scores.timeManagement = 8;
+    } else if (avgDailyHours <= 5) {
+      scores.timeManagement = 6;
+    } else {
+      scores.timeManagement = 3;
+    }
+
+    // Credibility
+    const totalCredibility = visits.reduce((sum, visit) => sum + (visit.credibility || 6), 0);
+    scores.credibility = totalCredibility / visits.length;
+
+    // Content Tone
+    const toneCounts = { cynical: 0, uplifting: 0, neutral: 0 };
+    visits.forEach(visit => {
+      toneCounts[visit.tone] = (toneCounts[visit.tone] || 0) + 1;
+    });
+    const upliftingRatio = toneCounts.uplifting / visits.length;
+    const neutralRatio = toneCounts.neutral / visits.length;
+    scores.contentTone = (upliftingRatio * 10) + (neutralRatio * 5);
+
+    // Political Balance
+    const biasCounts = { liberal: 0, conservative: 0, centrist: 0, unknown: 0 };
+    visits.forEach(visit => {
+      biasCounts[visit.politicalBias] = (biasCounts[visit.politicalBias] || 0) + 1;
+    });
+    const liberalRatio = biasCounts.liberal / visits.length;
+    const conservativeRatio = biasCounts.conservative / visits.length;
+    const centristRatio = biasCounts.centrist / visits.length;
+    const diversity = 1 - Math.max(liberalRatio, conservativeRatio);
+    scores.politicalBalance = (diversity * 8) + (centristRatio * 2);
+
+    // Overall Health
+    scores.overallHealth = Object.values(scores).reduce((sum, score) => sum + score, 0) / Object.keys(scores).length;
+
+    return scores;
+  }
+
+  updateHistoricalTrends() {
+    const weeks = this.getHistoricalWeeks(this.historicalWeeksLimit);
+
+    if (weeks.length === 0) {
+      document.getElementById('trendChart').innerHTML = '<div class="visits-empty"><h4>No historical data yet</h4><p>Keep browsing to see your trends over time.</p></div>';
+      document.getElementById('wowSummary').innerHTML = '';
+      return;
+    }
+
+    document.getElementById('weekRangeLabel').textContent = `Last ${weeks.length} week${weeks.length > 1 ? 's' : ''}`;
+
+    this.renderTrendChart(weeks);
+    this.renderWowSummary(weeks);
+  }
+
+  renderTrendChart(weeks) {
+    const container = document.getElementById('trendChart');
+
+    // Collect data for all weeks
+    const chartData = weeks.map(weekKey => {
+      const scores = this.calculateWeekScores(weekKey);
+      return {
+        weekKey,
+        label: this.formatWeekLabel(weekKey),
+        scores: scores || {}
+      };
+    });
+
+    // SVG dimensions
+    const width = container.clientWidth - 40 || 700;
+    const height = 260;
+    const padding = { top: 20, right: 20, bottom: 40, left: 50 };
+    const chartWidth = width - padding.left - padding.right;
+    const chartHeight = height - padding.top - padding.bottom;
+
+    // Create SVG
+    let svg = `<svg class="trend-chart-svg" viewBox="0 0 ${width} ${height}">`;
+
+    // Draw grid lines (horizontal)
+    for (let i = 0; i <= 10; i += 2) {
+      const y = padding.top + chartHeight - (i / 10) * chartHeight;
+      svg += `<line class="grid-line" x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="#e2e8f0" stroke-width="1"/>`;
+      svg += `<text class="axis-label" x="${padding.left - 10}" y="${y + 4}" text-anchor="end" fill="#718096" font-size="12">${i}</text>`;
+    }
+
+    // Draw x-axis labels
+    const xStep = chartWidth / (chartData.length - 1 || 1);
+    chartData.forEach((data, index) => {
+      const x = padding.left + index * xStep;
+      svg += `<text class="axis-label" x="${x}" y="${height - 10}" text-anchor="middle" fill="#718096" font-size="11">${data.label}</text>`;
+    });
+
+    // Draw lines for each active metric
+    this.activeMetrics.forEach(metric => {
+      const color = this.metricColors[metric];
+      const points = chartData
+        .map((data, index) => {
+          const score = data.scores[metric];
+          if (score === undefined || score === null) return null;
+          const x = padding.left + index * xStep;
+          const y = padding.top + chartHeight - (score / 10) * chartHeight;
+          return { x, y, score, label: data.label };
+        })
+        .filter(p => p !== null);
+
+      if (points.length > 1) {
+        // Draw line
+        const pathData = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+        svg += `<path class="data-line" d="${pathData}" stroke="${color}" fill="none" stroke-width="2"/>`;
+      }
+
+      // Draw dots
+      points.forEach(p => {
+        svg += `<circle class="data-dot" cx="${p.x}" cy="${p.y}" r="4" fill="${color}" data-metric="${metric}" data-score="${p.score.toFixed(1)}" data-label="${p.label}"/>`;
+      });
+    });
+
+    svg += '</svg>';
+    svg += '<div class="tooltip" id="chartTooltip"></div>';
+
+    container.innerHTML = svg;
+
+    // Add tooltip interactivity
+    this.setupChartTooltips(container);
+  }
+
+  setupChartTooltips(container) {
+    const tooltip = container.querySelector('.tooltip');
+    const dots = container.querySelectorAll('.data-dot');
+
+    dots.forEach(dot => {
+      dot.addEventListener('mouseenter', (e) => {
+        const metric = dot.dataset.metric;
+        const score = dot.dataset.score;
+        const label = dot.dataset.label;
+        const metricName = this.formatMetricName(metric);
+
+        tooltip.textContent = `${label}: ${metricName} ${score}`;
+        tooltip.classList.add('visible');
+
+        const rect = container.getBoundingClientRect();
+        const dotRect = dot.getBoundingClientRect();
+        tooltip.style.left = `${dotRect.left - rect.left + 10}px`;
+        tooltip.style.top = `${dotRect.top - rect.top - 30}px`;
+      });
+
+      dot.addEventListener('mouseleave', () => {
+        tooltip.classList.remove('visible');
+      });
+    });
+  }
+
+  formatMetricName(metric) {
+    const names = {
+      overallHealth: 'Overall Health',
+      credibility: 'Credibility',
+      contentTone: 'Content Tone',
+      politicalBalance: 'Political Balance',
+      contentBalance: 'Content Balance',
+      sourceDiversity: 'Source Diversity',
+      timeManagement: 'Time Management'
+    };
+    return names[metric] || metric;
+  }
+
+  formatWeekLabel(weekKey) {
+    const date = new Date(weekKey);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  renderWowSummary(weeks) {
+    const container = document.getElementById('wowSummary');
+
+    if (weeks.length < 2) {
+      container.innerHTML = '<div class="wow-card"><h4>Week-over-Week</h4><p style="color: #718096; font-size: 14px;">Need at least 2 weeks of data</p></div>';
+      return;
+    }
+
+    const currentWeek = weeks[weeks.length - 1];
+    const previousWeek = weeks[weeks.length - 2];
+
+    const currentScores = this.calculateWeekScores(currentWeek);
+    const previousScores = this.calculateWeekScores(previousWeek);
+
+    if (!currentScores || !previousScores) {
+      container.innerHTML = '';
+      return;
+    }
+
+    const metrics = ['overallHealth', 'credibility', 'contentTone', 'politicalBalance'];
+
+    container.innerHTML = metrics.map(metric => {
+      const current = currentScores[metric] || 0;
+      const previous = previousScores[metric] || 0;
+      const delta = current - previous;
+      const deltaPercent = previous > 0 ? ((delta / previous) * 100).toFixed(0) : 0;
+
+      let deltaClass = 'neutral';
+      let arrow = '→';
+      if (delta > 0.1) {
+        deltaClass = 'positive';
+        arrow = '↑';
+      } else if (delta < -0.1) {
+        deltaClass = 'negative';
+        arrow = '↓';
+      }
+
+      return `
+        <div class="wow-card">
+          <h4>${this.formatMetricName(metric)}</h4>
+          <div class="wow-change">
+            <span class="previous">${previous.toFixed(1)}</span>
+            <span class="arrow">→</span>
+            <span class="current">${current.toFixed(1)}</span>
+          </div>
+          <div class="wow-delta ${deltaClass}">
+            ${arrow} ${Math.abs(deltaPercent)}%
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  toggleMetric(metric, legendItem) {
+    const index = this.activeMetrics.indexOf(metric);
+    if (index > -1) {
+      this.activeMetrics.splice(index, 1);
+      legendItem.classList.remove('active');
+    } else {
+      this.activeMetrics.push(metric);
+      legendItem.classList.add('active');
+    }
+
+    const weeks = this.getHistoricalWeeks(this.historicalWeeksLimit);
+    this.renderTrendChart(weeks);
+  }
+
+  showMoreWeeks() {
+    this.historicalWeeksLimit += 4;
+    const totalWeeks = Object.keys(this.userData.weeklyData || {}).length;
+
+    if (this.historicalWeeksLimit >= totalWeeks) {
+      document.getElementById('prevWeeksBtn').disabled = true;
+      document.getElementById('prevWeeksBtn').textContent = 'All Weeks Shown';
+    }
+
+    this.updateHistoricalTrends();
+  }
+
+  // ==================== Visits Table Methods ====================
+
+  updateVisitsSection() {
+    this.populateWeekSelector();
+    this.renderVisitsTable();
+  }
+
+  populateWeekSelector() {
+    const select = document.getElementById('weekSelect');
+    const weeks = this.getHistoricalWeeks(52); // Up to a year of data
+
+    if (weeks.length === 0) {
+      select.innerHTML = '<option value="">No data available</option>';
+      return;
+    }
+
+    // Default to current week
+    if (!this.selectedWeekKey) {
+      this.selectedWeekKey = weeks[weeks.length - 1];
+    }
+
+    select.innerHTML = weeks.reverse().map(weekKey => {
+      const startDate = new Date(weekKey);
+      const endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 6);
+
+      const label = `${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+      const selected = weekKey === this.selectedWeekKey ? 'selected' : '';
+
+      return `<option value="${weekKey}" ${selected}>${label}</option>`;
+    }).join('');
+  }
+
+  getFilteredVisits() {
+    if (!this.selectedWeekKey || !this.userData.weeklyData[this.selectedWeekKey]) {
+      return [];
+    }
+
+    let visits = [...(this.userData.weeklyData[this.selectedWeekKey].visits || [])];
+
+    // Apply category filter
+    if (this.selectedCategory !== 'all') {
+      visits = visits.filter(v => v.category === this.selectedCategory);
+    }
+
+    // Apply sorting
+    visits.sort((a, b) => {
+      let aVal = a[this.currentSortColumn];
+      let bVal = b[this.currentSortColumn];
+
+      // Handle special cases
+      if (this.currentSortColumn === 'timestamp') {
+        aVal = aVal || 0;
+        bVal = bVal || 0;
+      } else if (typeof aVal === 'string') {
+        aVal = aVal.toLowerCase();
+        bVal = bVal.toLowerCase();
+      }
+
+      if (aVal < bVal) return this.currentSortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return this.currentSortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return visits;
+  }
+
+  renderVisitsTable(append = false) {
+    const tbody = document.getElementById('visitsTableBody');
+    const visits = this.getFilteredVisits();
+
+    const startIndex = append ? this.visitsCurrentPage * this.visitsPageSize : 0;
+    const endIndex = (this.visitsCurrentPage + 1) * this.visitsPageSize;
+    const visitsToShow = visits.slice(0, endIndex);
+
+    if (visitsToShow.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="8" class="visits-empty">
+            <h4>No visits found</h4>
+            <p>No browsing data matches your current filters.</p>
+          </td>
+        </tr>
+      `;
+      document.getElementById('visitsCount').textContent = '0 visits';
+      document.getElementById('loadMoreVisitsBtn').disabled = true;
+      return;
+    }
+
+    tbody.innerHTML = visitsToShow.map(visit => this.formatVisitRow(visit)).join('');
+
+    // Update count and load more button
+    document.getElementById('visitsCount').textContent = `Showing ${visitsToShow.length} of ${visits.length} visits`;
+    document.getElementById('loadMoreVisitsBtn').disabled = endIndex >= visits.length;
+
+    // Update sort indicators
+    this.updateSortIndicators();
+  }
+
+  formatVisitRow(visit) {
+    const timestamp = visit.timestamp ? new Date(visit.timestamp).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    }) : '-';
+
+    const credibility = visit.credibility || 6;
+    let credibilityClass = 'medium';
+    let rowClass = 'credibility-medium';
+    if (credibility >= 8) {
+      credibilityClass = 'high';
+      rowClass = 'credibility-high';
+    } else if (credibility < 6) {
+      credibilityClass = 'low';
+      rowClass = 'credibility-low';
+    }
+
+    const category = visit.category || 'other';
+    const tone = visit.tone || 'neutral';
+    const bias = visit.politicalBias || 'unknown';
+    const duration = visit.duration ? `${visit.duration}m` : '-';
+
+    return `
+      <tr class="${rowClass}">
+        <td>${timestamp}</td>
+        <td class="domain-cell" title="${visit.domain}">${visit.domain}</td>
+        <td class="title-cell" title="${visit.title || '-'}">${visit.title || '-'}</td>
+        <td><span class="category-badge ${category}">${this.formatCategoryName(category)}</span></td>
+        <td><span class="credibility-score ${credibilityClass}">${credibility.toFixed(1)}</span></td>
+        <td><span class="tone-badge ${tone}">${tone}</span></td>
+        <td><span class="bias-badge ${bias}">${bias}</span></td>
+        <td>${duration}</td>
+      </tr>
+    `;
+  }
+
+  sortVisitsTable(column) {
+    if (this.currentSortColumn === column) {
+      this.currentSortDirection = this.currentSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.currentSortColumn = column;
+      this.currentSortDirection = column === 'timestamp' ? 'desc' : 'asc';
+    }
+
+    this.visitsCurrentPage = 0;
+    this.renderVisitsTable();
+  }
+
+  updateSortIndicators() {
+    const headers = document.querySelectorAll('#visitsTable th[data-sort]');
+    headers.forEach(th => {
+      th.classList.remove('sorted-asc', 'sorted-desc');
+      if (th.dataset.sort === this.currentSortColumn) {
+        th.classList.add(this.currentSortDirection === 'asc' ? 'sorted-asc' : 'sorted-desc');
+      }
     });
   }
 }

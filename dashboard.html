@@ -286,6 +286,100 @@
                 </div>
             </section>
 
+            <!-- Historical Trends Section -->
+            <section class="history-section">
+                <h2>Trends Over Time</h2>
+
+                <!-- Week Selector -->
+                <div class="week-selector">
+                    <button class="btn btn-secondary" id="prevWeeksBtn">Show More Weeks</button>
+                    <span id="weekRangeLabel">Last 8 weeks</span>
+                </div>
+
+                <!-- Trend Chart -->
+                <div class="trend-chart-container">
+                    <div class="trend-chart" id="trendChart"></div>
+                    <div class="trend-legend" id="trendLegend">
+                        <div class="legend-item active" data-metric="overallHealth">
+                            <span class="legend-color" style="background: #667eea;"></span>
+                            <span>Overall Health</span>
+                        </div>
+                        <div class="legend-item active" data-metric="credibility">
+                            <span class="legend-color" style="background: #48bb78;"></span>
+                            <span>Credibility</span>
+                        </div>
+                        <div class="legend-item active" data-metric="contentTone">
+                            <span class="legend-color" style="background: #ed8936;"></span>
+                            <span>Content Tone</span>
+                        </div>
+                        <div class="legend-item active" data-metric="politicalBalance">
+                            <span class="legend-color" style="background: #9f7aea;"></span>
+                            <span>Political Balance</span>
+                        </div>
+                        <div class="legend-item" data-metric="contentBalance">
+                            <span class="legend-color" style="background: #4299e1;"></span>
+                            <span>Content Balance</span>
+                        </div>
+                        <div class="legend-item" data-metric="sourceDiversity">
+                            <span class="legend-color" style="background: #f56565;"></span>
+                            <span>Source Diversity</span>
+                        </div>
+                        <div class="legend-item" data-metric="timeManagement">
+                            <span class="legend-color" style="background: #38b2ac;"></span>
+                            <span>Time Management</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Week-over-Week Summary -->
+                <div class="wow-summary" id="wowSummary"></div>
+            </section>
+
+            <!-- Raw Visit Data Section -->
+            <section class="visits-section">
+                <h2>Browsing History</h2>
+
+                <!-- Week Filter -->
+                <div class="week-filter">
+                    <select id="weekSelect"></select>
+                    <select id="categoryFilter">
+                        <option value="all">All Categories</option>
+                        <option value="news">News</option>
+                        <option value="social">Social</option>
+                        <option value="entertainment">Entertainment</option>
+                        <option value="educational">Educational</option>
+                        <option value="professional">Professional</option>
+                    </select>
+                </div>
+
+                <!-- Visits Table -->
+                <div class="visits-table-container">
+                    <table class="visits-table" id="visitsTable">
+                        <thead>
+                            <tr>
+                                <th data-sort="timestamp">Date/Time</th>
+                                <th data-sort="domain">Domain</th>
+                                <th data-sort="title">Title</th>
+                                <th data-sort="category">Category</th>
+                                <th data-sort="credibility">Credibility</th>
+                                <th data-sort="tone">Tone</th>
+                                <th data-sort="politicalBias">Bias</th>
+                                <th data-sort="duration">Duration</th>
+                            </tr>
+                        </thead>
+                        <tbody id="visitsTableBody">
+                            <!-- Visits will be generated here -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <div class="visits-pagination">
+                    <span id="visitsCount">0 visits</span>
+                    <button class="btn btn-secondary" id="loadMoreVisitsBtn">Load More</button>
+                </div>
+            </section>
+
             <!-- Shareable Report Card -->
             <section class="shareable-report">
                 <h2>Share Your Report</h2>
