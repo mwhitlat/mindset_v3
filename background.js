@@ -15,6 +15,13 @@ class MindsetTracker {
     // Media sources database
     this.mediaSources = null;
 
+    // Echo chamber detection
+    this.recentBiasHistory = []; // Track last N articles' bias
+    this.maxBiasHistory = 10;    // How many recent articles to track
+    this.echoChamberThreshold = 0.7; // 70% same-bias triggers alert
+    this.lastEchoChamberAlert = 0;
+    this.echoChamberAlertCooldown = 1800000; // 30 minutes between alerts
+
     // Engagement hooks
     this.notificationCooldowns = new Map();
     this.lastBadgeUpdate = 0;
@@ -49,7 +56,17 @@ class MindsetTracker {
       if (!this.userData.weeklyData) {
         this.userData.weeklyData = {};
       }
-      
+
+      // Convert domains arrays back to Sets (they don't serialize properly)
+      // Also rebuilds categories from visits if missing
+      this.restoreDomainsAsSets();
+
+      // Recalculate scores for current week to ensure they're fresh
+      const currentWeekKey = this.getWeekKey();
+      if (this.userData.weeklyData[currentWeekKey]) {
+        this.calculateScores(currentWeekKey);
+      }
+
       // Start tracking if enabled
       if (this.isTracking) {
         this.startTracking();
@@ -103,7 +120,8 @@ class MindsetTracker {
         weeklyReportDay: 0, // Sunday
         dailyTimeLimit: 180, // 3 hours in minutes
         educationalGoal: 20, // 20% educational content
-        sourceDiversityGoal: 10 // 10+ unique domains
+        sourceDiversityGoal: 10, // 10+ unique domains
+        echoChamberAlerts: true // Enable echo chamber detection alerts
       },
       scores: {
         overallHealth: 7.2,
@@ -115,6 +133,49 @@ class MindsetTracker {
         politicalBalance: 7.8
       }
     };
+  }
+
+  // Restore data structures after loading from storage
+  // (Sets don't serialize to JSON properly - they become empty objects)
+  restoreDomainsAsSets() {
+    if (!this.userData?.weeklyData) return;
+
+    Object.keys(this.userData.weeklyData).forEach(weekKey => {
+      const weekData = this.userData.weeklyData[weekKey];
+      if (weekData) {
+        // If domains is an array, convert to Set
+        if (Array.isArray(weekData.domains)) {
+          weekData.domains = new Set(weekData.domains);
+        }
+        // If domains is not a Set (e.g., empty object from failed serialization), create new Set from visits
+        else if (!(weekData.domains instanceof Set)) {
+          const domainsFromVisits = (weekData.visits || []).map(v => v.domain);
+          weekData.domains = new Set(domainsFromVisits);
+        }
+
+        // Rebuild categories from visits if empty or missing
+        if (!weekData.categories || Object.keys(weekData.categories).length === 0) {
+          weekData.categories = {};
+          (weekData.visits || []).forEach(visit => {
+            if (visit.category) {
+              weekData.categories[visit.category] = (weekData.categories[visit.category] || 0) + 1;
+            }
+          });
+          console.log(`Rebuilt categories for ${weekKey}:`, weekData.categories);
+        }
+      }
+    });
+  }
+
+  // Convert domains Sets to arrays before saving to storage
+  prepareDataForStorage(userData) {
+    const dataCopy = JSON.parse(JSON.stringify(userData, (key, value) => {
+      if (value instanceof Set) {
+        return Array.from(value);
+      }
+      return value;
+    }));
+    return dataCopy;
   }
 
   addSampleData() {
@@ -368,16 +429,22 @@ class MindsetTracker {
     }
 
     // Social Media
-    if (domainLower.includes('facebook') || domainLower.includes('twitter') || 
-        domainLower.includes('instagram') || domainLower.includes('linkedin') ||
-        domainLower.includes('reddit') || domainLower.includes('tiktok')) {
+    if (domainLower.includes('facebook') || domainLower.includes('twitter') ||
+        domainLower.includes('x.com') || domainLower.includes('instagram') ||
+        domainLower.includes('linkedin') || domainLower.includes('reddit') ||
+        domainLower.includes('tiktok') || domainLower.includes('threads') ||
+        domainLower.includes('snapchat') || domainLower.includes('pinterest')) {
       return 'social';
     }
 
-    // Entertainment
-    if (domainLower.includes('youtube') || domainLower.includes('netflix') || 
+    // Entertainment (includes sports, gaming, streaming)
+    if (domainLower.includes('youtube') || domainLower.includes('netflix') ||
         domainLower.includes('spotify') || domainLower.includes('twitch') ||
-        titleLower.includes('entertainment') || titleLower.includes('movie')) {
+        domainLower.includes('espn') || domainLower.includes('sports') ||
+        domainLower.includes('nfl') || domainLower.includes('nba') ||
+        domainLower.includes('mlb') || domainLower.includes('nhl') ||
+        titleLower.includes('entertainment') || titleLower.includes('movie') ||
+        titleLower.includes('sport') || titleLower.includes('game')) {
       return 'entertainment';
     }
 
@@ -513,55 +580,66 @@ class MindsetTracker {
 
   saveVisitData(visitData) {
     const weekKey = this.getWeekKey();
-    
-    chrome.storage.local.get(['userData'], (result) => {
-      const userData = result.userData || this.userData;
-      
-      if (!userData.weeklyData[weekKey]) {
-        userData.weeklyData[weekKey] = {
-          visits: [],
-          domains: new Set(),
-          categories: {},
-          totalTime: 0
-        };
+
+    // Initialize week data if needed
+    if (!this.userData.weeklyData[weekKey]) {
+      this.userData.weeklyData[weekKey] = {
+        visits: [],
+        domains: new Set(),
+        categories: {},
+        totalTime: 0
+      };
+    }
+
+    // Ensure domains is a Set
+    if (!(this.userData.weeklyData[weekKey].domains instanceof Set)) {
+      const existingDomains = this.userData.weeklyData[weekKey].visits?.map(v => v.domain) || [];
+      this.userData.weeklyData[weekKey].domains = new Set(existingDomains);
+    }
+
+    this.userData.weeklyData[weekKey].visits.push(visitData);
+    this.userData.weeklyData[weekKey].domains.add(visitData.domain);
+
+    // Update category counts
+    const category = visitData.category;
+    console.log(`saveVisitData: domain=${visitData.domain}, category=${category}`);
+    if (category) {
+      this.userData.weeklyData[weekKey].categories[category] =
+        (this.userData.weeklyData[weekKey].categories[category] || 0) + 1;
+      console.log(`saveVisitData: categories now =`, JSON.stringify(this.userData.weeklyData[weekKey].categories));
+    } else {
+      console.warn('saveVisitData: No category for visit!', visitData.domain);
+    }
+
+    chrome.storage.local.set({ userData: this.prepareDataForStorage(this.userData) });
+
+    // Calculate scores weekly
+    this.calculateScores(weekKey);
+
+    // Echo chamber detection
+    if (visitData.politicalBias && visitData.politicalBias !== 'unknown') {
+      const echoChamberStatus = this.trackBiasHistory(visitData.politicalBias);
+      if (echoChamberStatus.isEchoChamber || echoChamberStatus.consecutiveCount >= 5) {
+        this.showEchoChamberAlert(echoChamberStatus);
       }
-      
-      userData.weeklyData[weekKey].visits.push(visitData);
-      userData.weeklyData[weekKey].domains.add(visitData.domain);
-      
-      // Update category counts
-      const category = visitData.category;
-      userData.weeklyData[weekKey].categories[category] = 
-        (userData.weeklyData[weekKey].categories[category] || 0) + 1;
-      
-      this.userData = userData;
-      chrome.storage.local.set({ userData });
-      
-      // Calculate scores weekly
-      this.calculateScores(weekKey);
-      
-      // Engagement hooks
-      this.checkAndShowNotifications(visitData);
-      this.updateSessionInsights();
-    });
+    }
+
+    // Engagement hooks
+    this.checkAndShowNotifications(visitData);
+    this.updateSessionInsights();
   }
 
   saveSiteVisit(siteData) {
     // Save the final duration for the site
     const duration = Math.floor((Date.now() - siteData.timestamp) / 1000 / 60); // minutes
     siteData.duration = duration;
-    
+
     const weekKey = this.getWeekKey();
-    chrome.storage.local.get(['userData'], (result) => {
-      const userData = result.userData || this.userData;
-      
-      if (userData.weeklyData[weekKey]) {
-        userData.weeklyData[weekKey].totalTime += duration;
-      }
-      
-      this.userData = userData;
-      chrome.storage.local.set({ userData });
-    });
+    if (this.userData.weeklyData[weekKey]) {
+      this.userData.weeklyData[weekKey].totalTime += duration;
+    }
+
+    chrome.storage.local.set({ userData: this.prepareDataForStorage(this.userData) });
   }
 
   getWeekKey() {
@@ -572,7 +650,13 @@ class MindsetTracker {
 
   calculateScores(weekKey) {
     const weekData = this.userData.weeklyData[weekKey];
-    if (!weekData) return;
+    if (!weekData) {
+      console.log('calculateScores: No weekData for', weekKey);
+      return;
+    }
+
+    console.log('calculateScores: weekData.categories =', JSON.stringify(weekData.categories));
+    console.log('calculateScores: weekData.visits.length =', weekData.visits?.length);
 
     // Calculate various scores
     const scores = {
@@ -584,6 +668,8 @@ class MindsetTracker {
       politicalBalance: this.calculatePoliticalBalanceScore(weekData)
     };
 
+    console.log('calculateScores: computed scores =', JSON.stringify(scores));
+
     // Calculate overall health score
     scores.overallHealth = Object.values(scores).reduce((sum, score) => sum + score, 0) / Object.keys(scores).length;
 
@@ -591,7 +677,7 @@ class MindsetTracker {
     this.userData.weeklyData[weekKey].scores = { ...scores };
 
     this.userData.scores = scores;
-    chrome.storage.local.set({ userData: this.userData });
+    chrome.storage.local.set({ userData: this.prepareDataForStorage(this.userData) });
   }
 
   calculateSourceDiversityScore(weekData) {
@@ -601,26 +687,69 @@ class MindsetTracker {
   }
 
   calculateContentBalanceScore(weekData) {
-    const categories = weekData.categories;
-    const total = Object.values(categories).reduce((sum, count) => sum + count, 0);
-    
-    if (total === 0) return 0;
-    
-    // Ideal distribution: news 30%, entertainment 25%, professional 20%, educational 15%, other 10%
-    const ideal = { news: 0.3, entertainment: 0.25, professional: 0.2, educational: 0.15, other: 0.1 };
-    const actual = {};
-    
-    Object.keys(ideal).forEach(cat => {
-      actual[cat] = (categories[cat] || 0) / total;
+    const rawCategories = weekData.categories || {};
+    console.log('ContentBalance - raw categories:', JSON.stringify(rawCategories));
+
+    // Normalize categories to core types
+    const categoryMapping = {
+      // News & Information
+      news: 'news',
+      'fact-check': 'news',
+      'state-media': 'news',
+      // Social Media
+      social: 'social',
+      // Entertainment (includes sports)
+      entertainment: 'entertainment',
+      sports: 'entertainment',
+      // Educational
+      educational: 'educational',
+      science: 'educational',
+      reference: 'educational',
+      // Professional
+      professional: 'professional',
+      tech: 'professional',
+      business: 'professional',
+      // Low quality - maps to entertainment but penalized elsewhere
+      conspiracy: 'entertainment',
+      // Other/unknown
+      other: 'other'
+    };
+
+    // Normalize categories
+    const categories = {};
+    Object.entries(rawCategories).forEach(([cat, count]) => {
+      const normalized = categoryMapping[cat] || 'other';
+      categories[normalized] = (categories[normalized] || 0) + count;
     });
-    
+
+    console.log('ContentBalance - normalized categories:', JSON.stringify(categories));
+    const total = Object.values(categories).reduce((sum, count) => sum + count, 0);
+    console.log('ContentBalance - total:', total);
+
+    if (total === 0) return 0;
+
+    // Ideal distribution across core categories
+    const ideal = {
+      news: 0.25,           // News & Information
+      social: 0.15,         // Social Media (limit recommended)
+      entertainment: 0.20,  // Entertainment & Sports
+      educational: 0.25,    // Educational, Science, Reference
+      professional: 0.15    // Professional, Tech, Business
+    };
+
     // Calculate deviation from ideal
     let deviation = 0;
     Object.keys(ideal).forEach(cat => {
-      deviation += Math.abs(actual[cat] - ideal[cat]);
+      const actual = (categories[cat] || 0) / total;
+      deviation += Math.abs(actual - ideal[cat]);
     });
-    
-    const score = Math.max(0, 10 - deviation * 20); // Max 10, reduce by deviation
+
+    // Add small penalty for "other" content (unrecognized sites)
+    const otherRatio = (categories.other || 0) / total;
+    deviation += otherRatio * 0.3;
+
+    const score = Math.max(0, 10 - deviation * 8); // Max 10, reduce by deviation
+    console.log('ContentBalance - deviation:', deviation, 'score:', score);
     return Math.round(score * 10) / 10;
   }
 
@@ -671,21 +800,273 @@ class MindsetTracker {
   calculatePoliticalBalanceScore(weekData) {
     const visits = weekData.visits;
     if (visits.length === 0) return 0;
-    
+
     const biasCounts = { liberal: 0, conservative: 0, centrist: 0, unknown: 0 };
     visits.forEach(visit => {
       biasCounts[visit.politicalBias] = (biasCounts[visit.politicalBias] || 0) + 1;
     });
-    
+
     const total = visits.length;
     const liberalRatio = biasCounts.liberal / total;
     const conservativeRatio = biasCounts.conservative / total;
     const centristRatio = biasCounts.centrist / total;
-    
+
     // Score based on diversity: more diverse = higher score
     const diversity = 1 - Math.max(liberalRatio, conservativeRatio);
     const score = (diversity * 8) + (centristRatio * 2);
     return Math.round(score * 10) / 10;
+  }
+
+  // ==================== Echo Chamber Detection ====================
+
+  /**
+   * Analyze political consumption for a given time period
+   * Returns detailed breakdown and echo chamber status
+   */
+  analyzePoliticalConsumption(visits) {
+    if (!visits || visits.length === 0) {
+      return {
+        total: 0,
+        breakdown: { left: 0, right: 0, center: 0, unknown: 0 },
+        percentages: { left: 0, right: 0, center: 0, unknown: 0 },
+        dominantBias: null,
+        isEchoChamber: false,
+        echoChamberSeverity: 0,
+        balanceScore: 5
+      };
+    }
+
+    // Map bias labels to simplified categories
+    const biasMapping = {
+      'far-left': 'left',
+      'left': 'left',
+      'left-center': 'left',
+      'center': 'center',
+      'right-center': 'right',
+      'right': 'right',
+      'far-right': 'right',
+      'centrist': 'center',
+      'liberal': 'left',
+      'conservative': 'right',
+      'unknown': 'unknown',
+      'varies': 'unknown'
+    };
+
+    const breakdown = { left: 0, right: 0, center: 0, unknown: 0 };
+
+    visits.forEach(visit => {
+      const bias = visit.politicalBias || 'unknown';
+      const category = biasMapping[bias] || 'unknown';
+      breakdown[category]++;
+    });
+
+    const total = visits.length;
+    const knownTotal = breakdown.left + breakdown.right + breakdown.center;
+
+    const percentages = {
+      left: total > 0 ? (breakdown.left / total) * 100 : 0,
+      right: total > 0 ? (breakdown.right / total) * 100 : 0,
+      center: total > 0 ? (breakdown.center / total) * 100 : 0,
+      unknown: total > 0 ? (breakdown.unknown / total) * 100 : 0
+    };
+
+    // Determine dominant bias (only considering known sources)
+    let dominantBias = null;
+    let maxCount = 0;
+    ['left', 'right', 'center'].forEach(bias => {
+      if (breakdown[bias] > maxCount) {
+        maxCount = breakdown[bias];
+        dominantBias = bias;
+      }
+    });
+
+    // Calculate echo chamber severity
+    // Severity is high when one side dominates and the other is absent
+    let echoChamberSeverity = 0;
+    let isEchoChamber = false;
+
+    if (knownTotal >= 3) { // Need at least 3 known sources to judge
+      const leftRatio = breakdown.left / knownTotal;
+      const rightRatio = breakdown.right / knownTotal;
+
+      // Echo chamber if >70% one side and <10% other side
+      if (leftRatio >= 0.7 && rightRatio <= 0.1) {
+        isEchoChamber = true;
+        echoChamberSeverity = Math.min(100, Math.round((leftRatio - 0.5) * 200));
+      } else if (rightRatio >= 0.7 && leftRatio <= 0.1) {
+        isEchoChamber = true;
+        echoChamberSeverity = Math.min(100, Math.round((rightRatio - 0.5) * 200));
+      }
+    }
+
+    // Calculate balance score (0-10, higher is better)
+    let balanceScore = 5;
+    if (knownTotal > 0) {
+      const leftRatio = breakdown.left / knownTotal;
+      const rightRatio = breakdown.right / knownTotal;
+      const centerRatio = breakdown.center / knownTotal;
+
+      // Perfect balance would be ~33% each
+      // Score decreases as one side dominates
+      const imbalance = Math.abs(leftRatio - rightRatio);
+      balanceScore = Math.max(0, 10 - (imbalance * 10) + (centerRatio * 2));
+      balanceScore = Math.round(balanceScore * 10) / 10;
+    }
+
+    return {
+      total,
+      breakdown,
+      percentages,
+      dominantBias,
+      isEchoChamber,
+      echoChamberSeverity,
+      balanceScore
+    };
+  }
+
+  /**
+   * Track recent article bias for real-time echo chamber detection
+   */
+  trackBiasHistory(politicalBias) {
+    // Map to simplified category
+    const biasMapping = {
+      'far-left': 'left', 'left': 'left', 'left-center': 'left',
+      'center': 'center', 'centrist': 'center',
+      'right-center': 'right', 'right': 'right', 'far-right': 'right',
+      'liberal': 'left', 'conservative': 'right'
+    };
+
+    const simplifiedBias = biasMapping[politicalBias] || 'unknown';
+
+    // Only track known biases for echo chamber detection
+    if (simplifiedBias !== 'unknown') {
+      this.recentBiasHistory.push({
+        bias: simplifiedBias,
+        timestamp: Date.now()
+      });
+
+      // Keep only recent history
+      if (this.recentBiasHistory.length > this.maxBiasHistory) {
+        this.recentBiasHistory.shift();
+      }
+    }
+
+    return this.checkRealtimeEchoChamber();
+  }
+
+  /**
+   * Check if recent browsing forms an echo chamber
+   */
+  checkRealtimeEchoChamber() {
+    if (this.recentBiasHistory.length < 5) {
+      return { isEchoChamber: false };
+    }
+
+    const counts = { left: 0, right: 0, center: 0 };
+    this.recentBiasHistory.forEach(item => {
+      counts[item.bias]++;
+    });
+
+    const total = this.recentBiasHistory.length;
+    const leftRatio = counts.left / total;
+    const rightRatio = counts.right / total;
+
+    let isEchoChamber = false;
+    let dominantBias = null;
+    let consecutiveCount = 0;
+
+    // Check for dominant bias
+    if (leftRatio >= this.echoChamberThreshold) {
+      isEchoChamber = true;
+      dominantBias = 'left';
+    } else if (rightRatio >= this.echoChamberThreshold) {
+      isEchoChamber = true;
+      dominantBias = 'right';
+    }
+
+    // Check for consecutive same-bias articles
+    if (this.recentBiasHistory.length >= 3) {
+      const lastBias = this.recentBiasHistory[this.recentBiasHistory.length - 1].bias;
+      consecutiveCount = 1;
+
+      for (let i = this.recentBiasHistory.length - 2; i >= 0; i--) {
+        if (this.recentBiasHistory[i].bias === lastBias) {
+          consecutiveCount++;
+        } else {
+          break;
+        }
+      }
+    }
+
+    return {
+      isEchoChamber,
+      dominantBias,
+      counts,
+      total,
+      consecutiveCount,
+      leftPercent: Math.round(leftRatio * 100),
+      rightPercent: Math.round(rightRatio * 100),
+      centerPercent: Math.round((counts.center / total) * 100)
+    };
+  }
+
+  /**
+   * Show echo chamber alert if conditions are met
+   */
+  async showEchoChamberAlert(echoChamberStatus) {
+    const now = Date.now();
+
+    // Check cooldown
+    if (now - this.lastEchoChamberAlert < this.echoChamberAlertCooldown) {
+      return;
+    }
+
+    if (!this.userData?.settings?.echoChamberAlerts) {
+      return;
+    }
+
+    let message = '';
+    let title = '';
+
+    if (echoChamberStatus.consecutiveCount >= 5) {
+      // Alert for consecutive same-bias content
+      const biasLabel = echoChamberStatus.dominantBias === 'left' ? 'left-leaning' : 'right-leaning';
+      title = 'Echo Chamber Alert';
+      message = `You've viewed ${echoChamberStatus.consecutiveCount} ${biasLabel} sources in a row. Consider reading a different perspective.`;
+    } else if (echoChamberStatus.isEchoChamber) {
+      // Alert for overall imbalance
+      const biasLabel = echoChamberStatus.dominantBias === 'left' ? 'left-leaning' : 'right-leaning';
+      const percent = echoChamberStatus.dominantBias === 'left'
+        ? echoChamberStatus.leftPercent
+        : echoChamberStatus.rightPercent;
+      title = 'Perspective Check';
+      message = `${percent}% of your recent reading has been ${biasLabel}. Diverse viewpoints lead to better understanding.`;
+    } else {
+      return; // No alert needed
+    }
+
+    this.lastEchoChamberAlert = now;
+
+    await this.showNotification({
+      type: 'echo_chamber',
+      title,
+      message,
+      icon: '⚖️'
+    });
+  }
+
+  /**
+   * Get weekly echo chamber analysis
+   */
+  getWeeklyEchoChamberAnalysis() {
+    const weekKey = this.getWeekKey();
+    const weekData = this.userData?.weeklyData?.[weekKey];
+
+    if (!weekData?.visits) {
+      return null;
+    }
+
+    return this.analyzePoliticalConsumption(weekData.visits);
   }
 
   handleTabActivation(activeInfo) {
@@ -735,7 +1116,7 @@ class MindsetTracker {
         break;
         
       case 'getUserData':
-        sendResponse({ userData: this.userData });
+        sendResponse({ userData: this.prepareDataForStorage(this.userData) });
         break;
         
       case 'getCurrentScores':
@@ -745,9 +1126,26 @@ class MindsetTracker {
       case 'getWeekData':
         const weekKey = this.getWeekKey();
         const weekData = this.userData.weeklyData[weekKey];
-        sendResponse({ weekData });
+        // Serialize to handle Sets
+        sendResponse({ weekData: weekData ? JSON.parse(JSON.stringify(weekData, (k, v) => v instanceof Set ? Array.from(v) : v)) : null });
         break;
-        
+
+      case 'getEchoChamberAnalysis':
+        const ecWeekKey = request.weekKey || this.getWeekKey();
+        const ecWeekData = this.userData.weeklyData[ecWeekKey];
+        if (ecWeekData?.visits) {
+          const analysis = this.analyzePoliticalConsumption(ecWeekData.visits);
+          const realtimeStatus = this.checkRealtimeEchoChamber();
+          sendResponse({
+            weekly: analysis,
+            realtime: realtimeStatus,
+            recentHistory: this.recentBiasHistory
+          });
+        } else {
+          sendResponse({ weekly: null, realtime: null });
+        }
+        break;
+
       case 'updateSettings':
         if (request.settings && typeof request.settings === 'object') {
           this.userData.settings = { ...this.userData.settings, ...this.sanitizeSettings(request.settings) };
@@ -760,6 +1158,7 @@ class MindsetTracker {
         
       case 'clearAllData':
         this.userData = this.initializeUserData();
+        this.recentBiasHistory = []; // Clear echo chamber tracking data
         this.saveTrackingState();
         sendResponse({ success: true });
         break;
@@ -957,13 +1356,13 @@ class MindsetTracker {
     try {
       const dataToStore = {
         isTracking: this.isTracking,
-        userData: this.userData,
+        userData: this.prepareDataForStorage(this.userData),
         encryptionEnabled: this.encryptionEnabled
       };
 
       if (this.encryptionEnabled) {
         const encryptedData = await this.encryptData(dataToStore);
-        await chrome.storage.local.set({ 
+        await chrome.storage.local.set({
           encryptedData: encryptedData,
           encryptionEnabled: true
         });

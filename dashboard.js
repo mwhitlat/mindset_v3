@@ -125,19 +125,25 @@ class DashboardManager {
 
   async loadData() {
     try {
+      console.log('Dashboard: Loading data...');
       // Get user data from background script
       const response = await this.sendMessage({ action: 'getUserData' });
+      console.log('Dashboard: Got response', response);
       this.userData = response.userData;
 
       if (this.userData) {
+        console.log('Dashboard: userData loaded, getting current week');
         this.currentWeekData = this.getCurrentWeekData();
+        console.log('Dashboard: currentWeekData', this.currentWeekData);
         this.updateDashboard();
+        console.log('Dashboard: updateDashboard complete');
       } else {
+        console.log('Dashboard: No userData, showing empty state');
         this.showEmptyState();
       }
     } catch (error) {
       console.error('Error loading dashboard data:', error);
-      this.showErrorState();
+      this.showErrorState(error.message || error.toString());
     }
   }
 
@@ -153,17 +159,28 @@ class DashboardManager {
   }
 
   updateDashboard() {
-    this.updateReportHeader();
-    this.updateScores();
-    this.updateContentBreakdown();
-    this.updateTimeAnalysis();
-    this.updateSourceAnalysis();
-    this.updateTonePoliticalAnalysis();
-    this.updateInsightsRecommendations();
-    this.updateHistoricalTrends();
-    this.updateVisitsSection();
-    this.updateShareableReport();
-    this.checkShowImportBanner();
+    const methods = [
+      ['updateReportHeader', () => this.updateReportHeader()],
+      ['updateScores', () => this.updateScores()],
+      ['updateEchoChamberSection', () => this.updateEchoChamberSection()],
+      ['updateContentBreakdown', () => this.updateContentBreakdown()],
+      ['updateTimeAnalysis', () => this.updateTimeAnalysis()],
+      ['updateSourceAnalysis', () => this.updateSourceAnalysis()],
+      ['updateTonePoliticalAnalysis', () => this.updateTonePoliticalAnalysis()],
+      ['updateInsightsRecommendations', () => this.updateInsightsRecommendations()],
+      ['updateHistoricalTrends', () => this.updateHistoricalTrends()],
+      ['updateVisitsSection', () => this.updateVisitsSection()],
+      ['updateShareableReport', () => this.updateShareableReport()],
+      ['checkShowImportBanner', () => this.checkShowImportBanner()]
+    ];
+
+    for (const [name, fn] of methods) {
+      try {
+        fn();
+      } catch (error) {
+        console.error(`Dashboard error in ${name}:`, error);
+      }
+    }
   }
 
   updateReportHeader() {
@@ -305,6 +322,14 @@ class DashboardManager {
     return names[category] || category;
   }
 
+  // Helper to get domain count (handles both Array and Set)
+  getDomainCount(weekData) {
+    if (!weekData?.domains) return 0;
+    if (Array.isArray(weekData.domains)) return weekData.domains.length;
+    if (weekData.domains instanceof Set) return weekData.domains.size;
+    return 0;
+  }
+
   updateTimeAnalysis() {
     if (!this.currentWeekData) return;
 
@@ -359,15 +384,20 @@ class DashboardManager {
     if (!this.currentWeekData) return;
 
     const visits = this.currentWeekData.visits;
-    const uniqueDomains = this.currentWeekData.domains.size;
+    const uniqueDomains = this.getDomainCount(this.currentWeekData);
 
     // Update source stats
     document.getElementById('uniqueDomains').textContent = uniqueDomains;
 
-    // Calculate average credibility
-    const totalCredibility = visits.reduce((sum, visit) => sum + (visit.credibility || 6), 0);
-    const avgCredibility = totalCredibility / visits.length;
-    document.getElementById('avgCredibility').textContent = `${avgCredibility.toFixed(1)}/10`;
+    // Calculate average credibility (only from known sources)
+    const knownCredibilityVisits = visits.filter(v => v.credibility != null);
+    if (knownCredibilityVisits.length > 0) {
+      const totalCredibility = knownCredibilityVisits.reduce((sum, visit) => sum + visit.credibility, 0);
+      const avgCredibility = totalCredibility / knownCredibilityVisits.length;
+      document.getElementById('avgCredibility').textContent = `${avgCredibility.toFixed(1)}/10`;
+    } else {
+      document.getElementById('avgCredibility').textContent = 'N/A';
+    }
 
     // Assess echo chamber risk
     const domainCount = uniqueDomains;
@@ -393,12 +423,13 @@ class DashboardManager {
     const container = document.getElementById('topSources');
     container.innerHTML = topSources.map(([domain, count]) => {
       const visit = visits.find(v => v.domain === domain);
-      const credibility = visit ? visit.credibility : 6;
-      
+      const credibility = visit?.credibility;
+      const credibilityDisplay = credibility != null ? `${credibility.toFixed(1)}/10` : 'Unknown';
+
       return `
         <div class="source-item">
           <span class="source-name">${domain}</span>
-          <span class="source-credibility">${credibility.toFixed(1)}/10 (${count} visits)</span>
+          <span class="source-credibility">${credibilityDisplay} (${count} visits)</span>
         </div>
       `;
     }).join('');
@@ -486,20 +517,21 @@ class DashboardManager {
     const scores = this.userData.scores;
 
     // Source diversity insight
-    if (weekData.domains.size >= 10) {
+    const domainCount = this.getDomainCount(weekData);
+    if (domainCount >= 10) {
       insights.push({
         type: 'positive',
-        message: `Excellent source diversity! You visited ${weekData.domains.size} different websites this week.`
+        message: `Excellent source diversity! You visited ${domainCount} different websites this week.`
       });
-    } else if (weekData.domains.size >= 5) {
+    } else if (domainCount >= 5) {
       insights.push({
         type: 'suggestion',
-        message: `Good start! Try visiting more diverse sources. You visited ${weekData.domains.size} websites.`
+        message: `Good start! Try visiting more diverse sources. You visited ${domainCount} websites.`
       });
     } else {
       insights.push({
         type: 'warning',
-        message: `Consider visiting more diverse sources. You visited ${weekData.domains.size} websites.`
+        message: `Consider visiting more diverse sources. You visited ${domainCount} websites.`
       });
     }
 
@@ -573,7 +605,7 @@ class DashboardManager {
     }
 
     // Source diversity goal
-    if (weekData.domains.size < 10) {
+    if (this.getDomainCount(weekData) < 10) {
       goals.push('Visit 3 new websites this week');
     }
 
@@ -672,12 +704,14 @@ class DashboardManager {
     `;
   }
 
-  showErrorState() {
+  showErrorState(errorMsg = '') {
     // Show error state
     document.querySelector('.dashboard-main').innerHTML = `
       <div class="error-state">
         <h2>Error Loading Data</h2>
         <p>Unable to load your data. Please try refreshing the page.</p>
+        ${errorMsg ? `<p style="color: #666; font-size: 12px; margin-top: 10px;">Error: ${errorMsg}</p>` : ''}
+        <p style="margin-top: 20px;"><button onclick="location.reload()">Reload Page</button></p>
       </div>
     `;
   }
@@ -692,6 +726,206 @@ class DashboardManager {
         }
       });
     });
+  }
+
+  // ==================== Echo Chamber Section ====================
+
+  async updateEchoChamberSection() {
+    try {
+      const response = await this.sendMessage({ action: 'getEchoChamberAnalysis' });
+      const analysis = response.weekly;
+      const realtimeStatus = response.realtime;
+
+      if (!analysis) {
+        this.showEchoChamberEmptyState();
+        return;
+      }
+
+      // Update balance indicator position
+      // Position: -100% = all left, 0 = center, 100% = all right
+      const leftPercent = analysis.percentages?.left || 0;
+      const rightPercent = analysis.percentages?.right || 0;
+      const centerPercent = analysis.percentages?.center || 0;
+      const unknownPercent = analysis.percentages?.unknown || 0;
+
+      // Calculate balance position (-50 to 50, with 0 being center)
+      let balancePosition = 0;
+      const knownPercent = leftPercent + rightPercent + centerPercent;
+      if (knownPercent > 0) {
+        // Weight: left = -1, center = 0, right = +1
+        balancePosition = ((rightPercent - leftPercent) / knownPercent) * 50;
+      }
+
+      const indicator = document.getElementById('balanceIndicator');
+      if (indicator) {
+        // Transform position: 50% is center, 0% is far left, 100% is far right
+        indicator.style.left = `${50 + balancePosition}%`;
+      }
+
+      // Update percentage displays
+      this.updatePercentageDisplay('leftPercent', 'leftBar', leftPercent);
+      this.updatePercentageDisplay('centerPercent', 'centerBar', centerPercent);
+      this.updatePercentageDisplay('rightPercent', 'rightBar', rightPercent);
+      this.updatePercentageDisplay('unknownPercent', 'unknownBar', unknownPercent);
+
+      // Update status text
+      const statusEl = document.getElementById('balanceStatus');
+      if (statusEl) {
+        const statusText = statusEl.querySelector('.status-text');
+        if (statusText) {
+          statusText.textContent = this.getBalanceStatusText(analysis);
+        }
+        statusEl.className = 'balance-status ' + this.getBalanceStatusClass(analysis);
+      }
+
+      // Show/hide echo chamber alert or balanced message
+      const alertEl = document.getElementById('echoChamberAlert');
+      const balancedEl = document.getElementById('balancedMessage');
+
+      if (analysis.isEchoChamber) {
+        // Show echo chamber warning
+        if (alertEl) {
+          alertEl.style.display = 'block';
+          const alertText = document.getElementById('echoChamberAlertText');
+          if (alertText) {
+            alertText.textContent = this.getEchoChamberAlertText(analysis);
+          }
+        }
+        if (balancedEl) balancedEl.style.display = 'none';
+
+        // Calculate dominant percentage from the bias that triggered echo chamber
+        const dominantPercentage = analysis.dominantBias === 'left' ? leftPercent :
+                                   analysis.dominantBias === 'right' ? rightPercent : 0;
+
+        // Update recent consumption info
+        const recentEl = document.getElementById('recentConsumption');
+        if (recentEl && analysis.dominantBias) {
+          recentEl.textContent = `${Math.round(dominantPercentage)}% of your weekly content leans ${analysis.dominantBias}`;
+        }
+
+        // Update consecutive info from realtime status
+        const consecutiveEl = document.getElementById('consecutiveInfo');
+        const consecutiveCount = realtimeStatus?.consecutiveCount || 0;
+        if (consecutiveEl && consecutiveCount >= 3) {
+          const realtimeBias = realtimeStatus?.dominantBias || analysis.dominantBias;
+          consecutiveEl.textContent = `You've viewed ${consecutiveCount} ${realtimeBias}-leaning sources in a row`;
+          consecutiveEl.style.display = 'block';
+        } else if (consecutiveEl) {
+          consecutiveEl.style.display = 'none';
+        }
+
+      } else if (this.isWellBalanced(analysis)) {
+        // Show balanced message
+        if (balancedEl) balancedEl.style.display = 'block';
+        if (alertEl) alertEl.style.display = 'none';
+      } else {
+        // Neither in echo chamber nor well balanced - hide both
+        if (alertEl) alertEl.style.display = 'none';
+        if (balancedEl) balancedEl.style.display = 'none';
+      }
+
+    } catch (error) {
+      console.error('Error updating echo chamber section:', error);
+      this.showEchoChamberEmptyState();
+    }
+  }
+
+  updatePercentageDisplay(percentId, barId, value) {
+    const percentEl = document.getElementById(percentId);
+    const barEl = document.getElementById(barId);
+
+    if (percentEl) {
+      percentEl.textContent = `${Math.round(value)}%`;
+    }
+    if (barEl) {
+      barEl.style.width = `${value}%`;
+    }
+  }
+
+  getBalanceStatusText(analysis) {
+    if (analysis.isEchoChamber) {
+      return `Echo chamber detected - ${analysis.dominantBias}-leaning`;
+    }
+
+    const leftPercent = analysis.percentages?.left || 0;
+    const rightPercent = analysis.percentages?.right || 0;
+    const centerPercent = analysis.percentages?.center || 0;
+
+    if (this.isWellBalanced(analysis)) {
+      return 'Well balanced perspective';
+    }
+
+    if (leftPercent > rightPercent + 20) {
+      return 'Leaning left';
+    } else if (rightPercent > leftPercent + 20) {
+      return 'Leaning right';
+    } else if (centerPercent > 50) {
+      return 'Mostly center sources';
+    }
+
+    return 'Moderately balanced';
+  }
+
+  getBalanceStatusClass(analysis) {
+    if (analysis.isEchoChamber) {
+      return 'danger';
+    }
+    if (this.isWellBalanced(analysis)) {
+      return 'good';
+    }
+    return 'warning';
+  }
+
+  isWellBalanced(analysis) {
+    const leftPercent = analysis.percentages?.left || 0;
+    const rightPercent = analysis.percentages?.right || 0;
+    const centerPercent = analysis.percentages?.center || 0;
+
+    // Well balanced if:
+    // 1. Left and right are within 15% of each other AND
+    // 2. No single viewpoint exceeds 50% AND
+    // 3. At least 20% center content
+    const leftRightDiff = Math.abs(leftPercent - rightPercent);
+    const maxSingleViewpoint = Math.max(leftPercent, rightPercent, centerPercent);
+
+    return leftRightDiff <= 15 && maxSingleViewpoint <= 50 && centerPercent >= 20;
+  }
+
+  getEchoChamberAlertText(analysis) {
+    const bias = analysis.dominantBias;
+    // Calculate dominant percentage from percentages object
+    const percent = bias === 'left' ? Math.round(analysis.percentages?.left || 0) :
+                    bias === 'right' ? Math.round(analysis.percentages?.right || 0) : 0;
+
+    if (percent >= 80) {
+      return `Strong echo chamber: ${percent}% of your content is ${bias}-leaning. Consider diversifying your sources.`;
+    } else if (percent >= 70) {
+      return `Echo chamber detected: ${percent}% ${bias}-leaning content. Try exploring different perspectives.`;
+    } else {
+      return `You may be in an echo chamber with ${percent}% ${bias}-leaning content.`;
+    }
+  }
+
+  showEchoChamberEmptyState() {
+    const statusEl = document.getElementById('balanceStatus');
+    if (statusEl) {
+      const statusText = statusEl.querySelector('.status-text');
+      if (statusText) {
+        statusText.textContent = 'Not enough data yet';
+      }
+      statusEl.className = 'balance-status';
+    }
+
+    // Reset bars to 0
+    ['left', 'center', 'right', 'unknown'].forEach(type => {
+      this.updatePercentageDisplay(`${type}Percent`, `${type}Bar`, 0);
+    });
+
+    // Hide alerts
+    const alertEl = document.getElementById('echoChamberAlert');
+    const balancedEl = document.getElementById('balancedMessage');
+    if (alertEl) alertEl.style.display = 'none';
+    if (balancedEl) balancedEl.style.display = 'none';
   }
 
   // ==================== Historical Trends Methods ====================
@@ -719,7 +953,7 @@ class DashboardManager {
     const scores = {};
 
     // Source Diversity
-    const uniqueDomains = weekData.domains ? weekData.domains.size : new Set(visits.map(v => v.domain)).size;
+    const uniqueDomains = this.getDomainCount(weekData) || new Set(visits.map(v => v.domain)).size;
     scores.sourceDiversity = Math.min(uniqueDomains / 10, 1) * 10;
 
     // Content Balance
