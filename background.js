@@ -11,6 +11,7 @@ class MindsetTracker {
     this.maxRequestsPerMinute = 60; // Rate limiting
     this.encryptionEnabled = false;
     this.encryptionKey = null;
+    this.encryptionSalt = null;
 
     // Media sources database
     this.mediaSources = null;
@@ -38,11 +39,13 @@ class MindsetTracker {
 
     // Load tracking state from storage
     try {
-      const result = await chrome.storage.local.get(['isTracking', 'userData', 'encryptedData', 'encryptionEnabled']);
-      
+      const result = await chrome.storage.local.get(['isTracking', 'userData', 'encryptedData', 'encryptionEnabled', 'encryptionSalt']);
+
       if (result.encryptionEnabled && result.encryptedData) {
         // Handle encrypted data
         this.encryptionEnabled = true;
+        // Load the per-user salt for key derivation
+        this.encryptionSalt = result.encryptionSalt || null;
         const decryptedData = await this.decryptData(result.encryptedData);
         this.isTracking = decryptedData.isTracking !== false;
         this.userData = decryptedData.userData || this.initializeUserData();
@@ -1425,7 +1428,8 @@ class MindsetTracker {
         const encryptedData = await this.encryptData(dataToStore);
         await chrome.storage.local.set({
           encryptedData: encryptedData,
-          encryptionEnabled: true
+          encryptionEnabled: true,
+          encryptionSalt: this.encryptionSalt // Store per-user salt
         });
       } else {
         await chrome.storage.local.set(dataToStore);
@@ -1599,11 +1603,26 @@ class MindsetTracker {
     return key;
   }
 
-  async deriveKeyFromPassword(password) {
-    // Derive encryption key from user password
+  async deriveKeyFromPassword(password, salt = null) {
+    // Derive encryption key from user password using per-user salt
     const encoder = new TextEncoder();
-    const salt = encoder.encode('mindset-salt-2024');
-    
+
+    // Use provided salt, stored salt, or generate new one
+    let saltBytes;
+    if (salt) {
+      saltBytes = salt;
+    } else if (this.encryptionSalt) {
+      // Decode stored base64 salt
+      saltBytes = new Uint8Array(
+        atob(this.encryptionSalt).split('').map(char => char.charCodeAt(0))
+      );
+    } else {
+      // Generate new random salt (16 bytes)
+      saltBytes = crypto.getRandomValues(new Uint8Array(16));
+      // Store as base64 for persistence
+      this.encryptionSalt = btoa(String.fromCharCode(...saltBytes));
+    }
+
     const keyMaterial = await crypto.subtle.importKey(
       'raw',
       encoder.encode(password),
@@ -1611,11 +1630,11 @@ class MindsetTracker {
       false,
       ['deriveBits', 'deriveKey']
     );
-    
+
     return crypto.subtle.deriveKey(
       {
         name: 'PBKDF2',
-        salt: salt,
+        salt: saltBytes,
         iterations: 100000,
         hash: 'SHA-256'
       },
@@ -1716,10 +1735,14 @@ class MindsetTracker {
     try {
       // Decrypt all data before disabling
       await this.reEncryptAllData();
-      
+
       this.encryptionEnabled = false;
       this.encryptionKey = null;
-      
+      this.encryptionSalt = null; // Clear salt when encryption disabled
+
+      // Remove salt from storage
+      await chrome.storage.local.remove(['encryptionSalt']);
+
       return true;
     } catch (error) {
       console.error('Failed to disable encryption:', error);

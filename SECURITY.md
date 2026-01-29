@@ -65,7 +65,7 @@ This document outlines the security measures implemented in the Mindset browser 
 - **PBKDF2**: Password-based key derivation with 100,000 iterations
 - **Optional Feature**: Users can enable/disable encryption
 - **Password Requirements**: Minimum 8 characters
-- **Salt**: Fixed salt for consistent key derivation
+- **Salt**: Random 16-byte salt generated per-user on first encryption enable
 - **IV**: Random initialization vector for each encryption
 
 ## Security Measures by Component

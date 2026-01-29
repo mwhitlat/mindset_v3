@@ -205,14 +205,17 @@ class BrowserStatusIndicator {
 
     const { credibility, politicalBias, sourceName, category } = pageData;
 
+    // Escape dynamic content to prevent XSS
+    const safeSourceName = this.escapeHtml(sourceName || 'This source');
+
     let message = '';
     let icon = '⚠️';
 
     if (credibility !== null && credibility < 5) {
-      message = `${sourceName || 'This source'} has a credibility rating of ${credibility}/10.`;
+      message = `${safeSourceName} has a credibility rating of ${credibility}/10.`;
     } else if (['far-left', 'far-right'].includes(politicalBias)) {
       const direction = politicalBias.includes('left') ? 'left' : 'right';
-      message = `${sourceName || 'This source'} has a strong ${direction}-leaning perspective.`;
+      message = `${safeSourceName} has a strong ${direction}-leaning perspective.`;
       icon = politicalBias.includes('left') ? '🔵' : '🔴';
     }
 
@@ -296,6 +299,9 @@ class BrowserStatusIndicator {
   showInterstitial(pageData, alternatives) {
     const { credibility, sourceName, category } = pageData;
 
+    // Escape dynamic content to prevent XSS
+    const safeSourceName = this.escapeHtml(sourceName || 'This source');
+
     let title = 'Caution: Low Credibility Source';
     let description = '';
     let iconEmoji = '⚠️';
@@ -309,7 +315,7 @@ class BrowserStatusIndicator {
       description = 'This source is controlled by a government and may present a biased perspective.';
       iconEmoji = '🏛️';
     } else {
-      description = `This source has a credibility rating of ${credibility}/10 based on fact-checking accuracy and editorial standards.`;
+      description = `${safeSourceName} has a credibility rating of ${credibility}/10 based on fact-checking accuracy and editorial standards.`;
     }
 
     this.interstitial.innerHTML = `
@@ -441,6 +447,9 @@ class BrowserStatusIndicator {
       existingPanel.remove();
     }
 
+    // Escape dynamic content to prevent XSS
+    const safeCurrentSource = this.escapeHtml(currentSource);
+
     this.alternativesPanel = document.createElement('div');
     this.alternativesPanel.id = 'mindset-alternatives-panel';
     this.alternativesPanel.style.cssText = `
@@ -460,8 +469,13 @@ class BrowserStatusIndicator {
     `;
 
     const alternativesList = alternatives.length > 0
-      ? alternatives.map(alt => `
-          <a href="https://${alt.domain}" target="_blank" style="
+      ? alternatives.map(alt => {
+          // Escape all dynamic content from alternatives
+          const safeName = this.escapeHtml(alt.name);
+          const safeDomain = this.escapeHtml(alt.domain);
+          const safeBias = this.escapeHtml(this.formatBias(alt.bias));
+          return `
+          <a href="https://${safeDomain}" target="_blank" style="
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -474,8 +488,8 @@ class BrowserStatusIndicator {
             transition: background 0.2s;
           " onmouseover="this.style.background='#e9ecef'" onmouseout="this.style.background='#f8f9fa'">
             <div style="flex: 1;">
-              <span style="font-weight: 500; display: block;">${alt.name}</span>
-              <span style="font-size: 12px; color: #666;">${this.formatBias(alt.bias)}</span>
+              <span style="font-weight: 500; display: block;">${safeName}</span>
+              <span style="font-size: 12px; color: #666;">${safeBias}</span>
             </div>
             <div style="
               background: ${this.getCredibilityBadgeColor(alt.credibility)};
@@ -487,13 +501,13 @@ class BrowserStatusIndicator {
               flex-shrink: 0;
             ">${alt.credibility}/10</div>
           </a>
-        `).join('')
+        `}).join('')
       : '<p style="text-align: center; color: #666; padding: 20px 0;">No alternatives available for this category.</p>';
 
     this.alternativesPanel.innerHTML = `
       <div style="margin-bottom: 16px;">
         <h3 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 600;">Balance Your Perspective</h3>
-        <p style="margin: 0; color: #666; font-size: 14px;">You're reading ${currentSource}. Here are other viewpoints:</p>
+        <p style="margin: 0; color: #666; font-size: 14px;">You're reading ${safeCurrentSource}. Here are other viewpoints:</p>
       </div>
       <div style="margin-bottom: 16px;">
         ${alternativesList}
@@ -565,6 +579,14 @@ class BrowserStatusIndicator {
     if (credibility >= 8) return '#4CAF50';
     if (credibility >= 6) return '#FF9800';
     return '#F44336';
+  }
+
+  // Security: Escape HTML entities to prevent XSS when using innerHTML
+  escapeHtml(text) {
+    if (typeof text !== 'string') return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 
   async checkIfEnabled() {
@@ -861,9 +883,12 @@ class BrowserStatusIndicator {
 
   getShortTermText(data) {
     const { category, credibility, politicalBias, tone } = data;
+    // Escape dynamic content to prevent XSS
+    const safeCategory = this.escapeHtml(category ? category.charAt(0).toUpperCase() + category.slice(1) : 'Unknown');
     const biasText = politicalBias === 'liberal' ? '🔵 Liberal' : politicalBias === 'conservative' ? '🔴 Conservative' : politicalBias === 'centrist' ? '🟡 Centrist' : '⚪ Unknown';
     const toneText = tone === 'uplifting' ? '😊 Uplifting' : tone === 'cynical' ? '😔 Cynical' : '😐 Neutral';
-    return `<span style="margin-right:8px;"><span style="color:#64B5F6;">📄</span> ${category.charAt(0).toUpperCase() + category.slice(1)}</span><span style="margin-right:8px;"><span style="color:${this.getCredibilityColor(credibility)};">🔍</span> ${credibility.toFixed(1)}/10</span><span style="margin-right:8px;"><span style="color:#9C27B0;">🏛️</span> ${biasText}</span><span><span style="color:#FFB74D;">💭</span> ${toneText}</span>`;
+    const safeCredibility = typeof credibility === 'number' ? credibility.toFixed(1) : '5.0';
+    return `<span style="margin-right:8px;"><span style="color:#64B5F6;">📄</span> ${safeCategory}</span><span style="margin-right:8px;"><span style="color:${this.getCredibilityColor(credibility)};">🔍</span> ${safeCredibility}/10</span><span style="margin-right:8px;"><span style="color:#9C27B0;">🏛️</span> ${biasText}</span><span><span style="color:#FFB74D;">💭</span> ${toneText}</span>`;
   }
 
   getShortTermTooltip(data) {
