@@ -17,9 +17,10 @@ A comprehensive guide to understanding how the Mindset browser extension works, 
 9. [The Warning System](#9-the-warning-system)
 10. [Auto-Hide Status Bar](#10-auto-hide-status-bar)
 11. [Security Patterns](#11-security-patterns)
-12. [Key Programming Concepts](#12-key-programming-concepts)
-13. [Debugging Tips](#13-debugging-tips)
-14. [Common Patterns to Reuse](#14-common-patterns-to-reuse)
+12. [Goals & Streaks System](#12-goals--streaks-system)
+13. [Key Programming Concepts](#13-key-programming-concepts)
+14. [Debugging Tips](#14-debugging-tips)
+15. [Common Patterns to Reuse](#15-common-patterns-to-reuse)
 
 ---
 
@@ -424,6 +425,10 @@ const instance = new ClassName();
 | `assessPoliticalBias(domain)` | Looks up political bias |
 | `handleMessage(request, sender, sendResponse)` | Routes all incoming messages |
 | `getAlternativeSources(bias, category)` | Finds alternative news sources |
+| `getDailyProgress(dateKey)` | Calculates today's goal metrics |
+| `checkDailyGoals()` | Evaluates daily goal completion |
+| `checkWeeklyGoals()` | Evaluates weekly goal completion |
+| `updateStreaks()` | Updates streak counts on visit |
 
 **Message Actions Handled:**
 - `getTrackingState` - Returns if tracking is on
@@ -434,6 +439,8 @@ const instance = new ClassName();
 - `updateSettings` - Saves settings changes
 - `analyzePageForTab` - Analyzes a page
 - `getAlternativeSources` - Gets alternative sources
+- `getGoalsProgress` - Returns goals, progress, and streaks
+- `updateGoals` - Saves goal configuration changes
 
 ---
 
@@ -535,6 +542,9 @@ document.getElementById('some-button').addEventListener('click', () => {
 | `updateUI(userData)` | Updates all UI elements |
 | `updateScores(scores)` | Displays health scores |
 | `generateInsights(weekData)` | Creates insight messages |
+| `loadGoalsProgress()` | Fetches goals data from background |
+| `updateGoalsUI(data)` | Updates goals section display |
+| `updateGoalItem(id, current, target, isMet)` | Updates a single goal progress bar |
 | `openDashboard()` | Opens dashboard in new tab |
 | `openSettings()` | Opens settings in new tab |
 
@@ -553,6 +563,7 @@ document.getElementById('some-button').addEventListener('click', () => {
 | `loadData()` | Gets current settings |
 | `populateSettings()` | Fills form with current values |
 | `updateSetting(key, value)` | Saves a setting change |
+| `updateGoalSetting(type, key, value)` | Saves a goal setting change |
 | `exportData()` | Downloads user data as JSON |
 | `clearData()` | Deletes all user data |
 
@@ -1079,7 +1090,282 @@ sanitizeSettings(settings) {
 
 ---
 
-## 12. Key Programming Concepts
+## 12. Goals & Streaks System
+
+The Goals & Streaks system adds gamification to encourage balanced content consumption. Users set daily goals and track progress with streaks for consecutive days meeting those goals.
+
+### Design Philosophy
+
+- **Motivating, not punishing** - Celebrate achievements, gently encourage on misses
+- **Flexible goals** - Users choose what matters to them
+- **Visual progress** - Clear indicators of daily progress
+- **Streak psychology** - Leverage loss aversion (don't break the streak!)
+
+### Data Structure
+
+The goals system adds three new properties to `userData`:
+
+```javascript
+userData = {
+  // ... existing properties ...
+
+  goals: {
+    daily: {
+      enabled: true,
+      minCenterSources: 1,        // Read from at least 1 center-bias source
+      minEducationalPercent: 10,  // At least 10% educational content
+      maxNewsPercent: 60,         // No more than 60% news
+      minUniqueDomains: 3         // Visit at least 3 different sites
+    },
+    weekly: {
+      enabled: true,
+      minSourceDiversity: 10,     // 10+ unique domains
+      targetEducationalPercent: 20,
+      targetPoliticalBalance: 6   // Score of 6+ on political balance
+    }
+  },
+
+  streaks: {
+    daily: {
+      current: 0,                 // Current consecutive days
+      longest: 0,                 // Personal best
+      lastMetDate: null           // ISO date "2024-01-20"
+    },
+    weekly: {
+      current: 0,
+      longest: 0,
+      lastMetWeek: null           // Week key "2024-01-14"
+    }
+  },
+
+  dailyProgress: {
+    // Keyed by ISO date
+    "2024-01-20": {
+      centerSourcesRead: 2,
+      educationalPercent: 15,
+      newsPercent: 45,
+      uniqueDomains: 5,
+      allGoalsMet: true,
+      timestamp: 1705795200000
+    }
+  }
+}
+```
+
+### Key Methods in background.js
+
+| Method | Purpose |
+|--------|---------|
+| `getTodayKey()` | Returns today's date as ISO string "2024-01-20" |
+| `getDailyProgress(dateKey)` | Calculates today's metrics from visits |
+| `getEmptyDailyProgress()` | Returns zeroed progress object |
+| `checkDailyGoals()` | Compares progress against daily goal thresholds |
+| `checkWeeklyGoals()` | Compares week data against weekly goal thresholds |
+| `updateStreaks()` | Updates daily streak count, saves progress |
+| `updateWeeklyStreak()` | Updates weekly streak count |
+| `getEducationalPercent(weekData)` | Helper to calculate educational % |
+
+### How Streak Logic Works
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  User visits a page                                              │
+│       │                                                          │
+│       ▼                                                          │
+│  saveVisitData() saves the visit                                 │
+│       │                                                          │
+│       ▼                                                          │
+│  updateStreaks() is called                                       │
+│       │                                                          │
+│       ▼                                                          │
+│  checkDailyGoals() evaluates progress vs thresholds              │
+│       │                                                          │
+│       ├──▶ All goals met?                                        │
+│       │         │                                                │
+│       │         ├─ YES: Check if consecutive day                 │
+│       │         │         │                                      │
+│       │         │         ├─ Last met = yesterday → streak++     │
+│       │         │         └─ Last met ≠ yesterday → streak = 1   │
+│       │         │                                                │
+│       │         └─ NO: Don't update streak (yet)                 │
+│       │                                                          │
+│       ▼                                                          │
+│  Save dailyProgress[today] with current metrics                  │
+│       │                                                          │
+│       ▼                                                          │
+│  updateWeeklyStreak() checks weekly goals                        │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Goal Checking Logic
+
+```javascript
+checkDailyGoals() {
+  const goals = this.userData.goals?.daily;
+  if (!goals || !goals.enabled) {
+    return { allMet: true, results: {}, progress: this.getEmptyDailyProgress() };
+  }
+
+  const progress = this.getDailyProgress();
+
+  const results = {
+    centerSources: progress.centerSourcesRead >= goals.minCenterSources,
+    educational: progress.educationalPercent >= goals.minEducationalPercent,
+    newsLimit: progress.newsPercent <= goals.maxNewsPercent,
+    diversity: progress.uniqueDomains >= goals.minUniqueDomains
+  };
+
+  const allMet = Object.values(results).every(v => v);
+
+  return { allMet, results, progress };
+}
+```
+
+### Streak Increment Logic
+
+The key insight is handling consecutive days:
+
+```javascript
+updateStreaks() {
+  const today = this.getTodayKey();
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+
+  const dailyCheck = this.checkDailyGoals();
+
+  if (dailyCheck.allMet && dailyCheck.progress.totalVisits > 0) {
+    const lastMet = this.userData.streaks.daily.lastMetDate;
+
+    if (lastMet === yesterday) {
+      // Consecutive day - increment streak
+      this.userData.streaks.daily.current++;
+    } else if (lastMet !== today) {
+      // Streak broken or first time - reset to 1
+      this.userData.streaks.daily.current = 1;
+    }
+    // If lastMet === today, we already counted today, don't increment again
+
+    this.userData.streaks.daily.lastMetDate = today;
+    this.userData.streaks.daily.longest = Math.max(
+      this.userData.streaks.daily.longest,
+      this.userData.streaks.daily.current
+    );
+  }
+
+  // Save today's progress regardless of goal completion
+  this.userData.dailyProgress[today] = {
+    ...dailyCheck.progress,
+    allGoalsMet: dailyCheck.allMet
+  };
+}
+```
+
+### Message Handlers
+
+| Action | Request | Response |
+|--------|---------|----------|
+| `getGoalsProgress` | `{ action: 'getGoalsProgress' }` | `{ daily, weekly, streaks, goals }` |
+| `updateGoals` | `{ action: 'updateGoals', goals: {...} }` | `{ success: true }` |
+
+### UI Components
+
+**Popup (popup.html/js/css):**
+- Goals section between Quick Stats and Main Scores
+- Progress bars for each daily goal
+- Streak badge (🔥) with current count
+- "Hot streak" animation at 7+ days
+
+**Settings (settings.html/js/css):**
+- Daily Goals toggle and configuration
+- Streak cards showing current and best streaks
+- Select dropdowns for goal thresholds
+
+### Progress Bar Pattern
+
+```javascript
+updateGoalItem(id, current, target, isMet, suffix = '') {
+  const item = document.getElementById(`goal-${id}`);
+  const value = item.querySelector('.goal-value');
+  const fill = item.querySelector('.goal-fill');
+
+  // Display value with optional suffix
+  value.textContent = suffix ? `${current}${suffix}` : `${current}/${target}`;
+
+  // Calculate and set progress bar width
+  const percent = Math.min((current / target) * 100, 100);
+  fill.style.width = `${percent}%`;
+
+  // Color coding: green when met, purple when in progress
+  if (isMet) {
+    item.classList.add('goal-met');
+    fill.style.background = '#4CAF50';
+  } else {
+    item.classList.remove('goal-met');
+    fill.style.background = '#667EEA';
+  }
+}
+```
+
+### Handling Existing Users
+
+For users who installed the extension before goals were added, the `getGoalsProgress` handler provides default values:
+
+```javascript
+case 'getGoalsProgress':
+  const defaultGoals = {
+    daily: { enabled: true, minCenterSources: 1, ... },
+    weekly: { enabled: true, minSourceDiversity: 10, ... }
+  };
+  sendResponse({
+    daily: dailyGoals,
+    weekly: weeklyGoals,
+    streaks: this.userData.streaks || { daily: { current: 0, longest: 0 }, weekly: { current: 0, longest: 0 } },
+    goals: this.userData.goals || defaultGoals  // Fallback for existing users
+  });
+  break;
+```
+
+### CSS for Streak Badge
+
+```css
+.streak-badge {
+  background: #FF6B35;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.streak-badge.hot-streak {
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+```
+
+### Testing the Feature
+
+1. **Test goal progress:**
+   - Browse several sites with different categories/biases
+   - Open popup - verify progress bars update
+   - Check that checkmarks appear when goals are met
+
+2. **Test streaks:**
+   - Meet all daily goals
+   - Verify streak shows "1" in popup and settings
+   - Next day, meet goals again → streak should be "2"
+   - Miss a day → streak resets on next achievement
+
+3. **Test settings:**
+   - Change goal values in Settings > Goals & Limits
+   - Close and reopen settings - verify persistence
+   - Disable daily goals - verify popup hides goals section
+
+---
+
+## 13. Key Programming Concepts
 
 ### Async/Await
 
@@ -1234,7 +1520,7 @@ map.delete('key');
 
 ---
 
-## 13. Debugging Tips
+## 14. Debugging Tips
 
 ### Chrome DevTools for Extensions
 
@@ -1295,7 +1581,7 @@ After editing code:
 
 ---
 
-## 14. Common Patterns to Reuse
+## 15. Common Patterns to Reuse
 
 ### Pattern 1: Message Handler Switch
 
