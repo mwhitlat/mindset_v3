@@ -119,6 +119,96 @@ input:checked + .slider:before {
     color: #495057;
 }
 
+/* Goals Section */
+.goals-section {
+    margin: 12px 20px;
+    padding: 12px;
+    background: rgba(102, 126, 234, 0.1);
+    border-radius: 8px;
+}
+
+.goals-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    font-weight: 600;
+    font-size: 14px;
+    color: #495057;
+}
+
+.goals-icon {
+    font-size: 16px;
+}
+
+.streak-badge {
+    margin-left: auto;
+    background: #FF6B35;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.streak-badge.hot-streak {
+    animation: pulse 1s infinite;
+}
+
+.goals-progress {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.goal-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+}
+
+.goal-label {
+    flex: 1;
+    color: #666;
+}
+
+.goal-value {
+    width: 40px;
+    text-align: right;
+    font-weight: 500;
+    color: #495057;
+}
+
+.goal-bar {
+    width: 60px;
+    height: 6px;
+    background: #E0E0E0;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.goal-fill {
+    height: 100%;
+    background: #667EEA;
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+.goal-item.goal-met .goal-value {
+    color: #4CAF50;
+}
+
+.goal-item.goal-met .goal-label::after {
+    content: ' ✓';
+    color: #4CAF50;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
 /* Scores Section */
 .scores-section {
     padding: 20px;

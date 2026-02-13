@@ -293,6 +293,66 @@
                 <!-- Goals & Limits Section -->
                 <section class="settings-section" id="goals">
                     <div class="settings-group">
+                        <h3>Daily Goals</h3>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Enable Daily Goals</h4>
+                                <p>Track daily consumption targets and build streaks</p>
+                            </div>
+                            <div class="setting-control">
+                                <label class="toggle">
+                                    <input type="checkbox" id="dailyGoalsEnabled" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Center-Bias Sources</h4>
+                                <p>Minimum balanced sources per day</p>
+                            </div>
+                            <div class="setting-control">
+                                <select id="minCenterSources" class="select-control">
+                                    <option value="0">None</option>
+                                    <option value="1" selected>1 source</option>
+                                    <option value="2">2 sources</option>
+                                    <option value="3">3 sources</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Source Diversity</h4>
+                                <p>Minimum unique sites per day</p>
+                            </div>
+                            <div class="setting-control">
+                                <select id="minUniqueDomains" class="select-control">
+                                    <option value="2">2 sites</option>
+                                    <option value="3" selected>3 sites</option>
+                                    <option value="5">5 sites</option>
+                                    <option value="10">10 sites</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="streak-display">
+                            <div class="streak-card">
+                                <span class="streak-icon">🔥</span>
+                                <span class="streak-count" id="currentDailyStreak">0</span>
+                                <span class="streak-label">Day Streak</span>
+                            </div>
+                            <div class="streak-card">
+                                <span class="streak-icon">🏆</span>
+                                <span class="streak-count" id="longestDailyStreak">0</span>
+                                <span class="streak-label">Best Streak</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
                         <h3>Content Balance Goals</h3>
                         <div class="setting-item">
                             <div class="setting-info">

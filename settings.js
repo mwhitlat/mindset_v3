@@ -206,6 +206,19 @@ class SettingsManager {
     document.getElementById('enableInterstitials').addEventListener('change', (e) => {
       this.updateSetting('enableInterstitials', e.target.checked);
     });
+
+    // Daily Goals settings
+    document.getElementById('dailyGoalsEnabled').addEventListener('change', (e) => {
+      this.updateGoalSetting('daily', 'enabled', e.target.checked);
+    });
+
+    document.getElementById('minCenterSources').addEventListener('change', (e) => {
+      this.updateGoalSetting('daily', 'minCenterSources', parseInt(e.target.value));
+    });
+
+    document.getElementById('minUniqueDomains').addEventListener('change', (e) => {
+      this.updateGoalSetting('daily', 'minUniqueDomains', parseInt(e.target.value));
+    });
   }
 
   setupRangeInputs() {
@@ -362,6 +375,34 @@ class SettingsManager {
     if (settings.enableInterstitials !== undefined) {
       document.getElementById('enableInterstitials').checked = settings.enableInterstitials;
     }
+
+    // Daily Goals settings
+    if (this.userData.goals) {
+      const dailyGoalsEnabled = document.getElementById('dailyGoalsEnabled');
+      if (dailyGoalsEnabled) {
+        dailyGoalsEnabled.checked = this.userData.goals.daily?.enabled !== false;
+      }
+      const minCenterSources = document.getElementById('minCenterSources');
+      if (minCenterSources) {
+        minCenterSources.value = this.userData.goals.daily?.minCenterSources || 1;
+      }
+      const minUniqueDomains = document.getElementById('minUniqueDomains');
+      if (minUniqueDomains) {
+        minUniqueDomains.value = this.userData.goals.daily?.minUniqueDomains || 3;
+      }
+    }
+
+    // Streaks display
+    if (this.userData.streaks) {
+      const currentDailyStreak = document.getElementById('currentDailyStreak');
+      if (currentDailyStreak) {
+        currentDailyStreak.textContent = this.userData.streaks.daily?.current || 0;
+      }
+      const longestDailyStreak = document.getElementById('longestDailyStreak');
+      if (longestDailyStreak) {
+        longestDailyStreak.textContent = this.userData.streaks.daily?.longest || 0;
+      }
+    }
   }
 
   switchSection(section) {
@@ -384,16 +425,35 @@ class SettingsManager {
     if (!this.userData.settings) {
       this.userData.settings = {};
     }
-    
+
     this.userData.settings[key] = value;
-    
+
     try {
-      await this.sendMessage({ 
-        action: 'updateSettings', 
-        settings: this.userData.settings 
+      await this.sendMessage({
+        action: 'updateSettings',
+        settings: this.userData.settings
       });
     } catch (error) {
       console.error('Error updating setting:', error);
+    }
+  }
+
+  async updateGoalSetting(type, key, value) {
+    if (!this.userData.goals) {
+      this.userData.goals = { daily: {}, weekly: {} };
+    }
+    if (!this.userData.goals[type]) {
+      this.userData.goals[type] = {};
+    }
+    this.userData.goals[type][key] = value;
+
+    try {
+      await this.sendMessage({
+        action: 'updateGoals',
+        goals: this.userData.goals
+      });
+    } catch (error) {
+      console.error('Error updating goal setting:', error);
     }
   }
 

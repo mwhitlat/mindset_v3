@@ -44,6 +44,9 @@ class PopupManager {
       } else {
         this.showEmptyState();
       }
+
+      // Load goals progress
+      await this.loadGoalsProgress();
     } catch (error) {
       console.error('Error loading data:', error);
       this.showErrorState();
@@ -291,6 +294,84 @@ class PopupManager {
         <div class="insight-text">Unable to load data. Please try refreshing the extension.</div>
       </div>
     `;
+  }
+
+  async loadGoalsProgress() {
+    try {
+      const response = await this.sendMessage({ action: 'getGoalsProgress' });
+      this.updateGoalsUI(response);
+    } catch (error) {
+      console.error('Error loading goals progress:', error);
+    }
+  }
+
+  updateGoalsUI(data) {
+    const { daily, streaks, goals } = data;
+
+    // Hide goals section if disabled
+    const goalsSection = document.querySelector('.goals-section');
+    if (!goals?.daily?.enabled) {
+      if (goalsSection) goalsSection.style.display = 'none';
+      return;
+    }
+    if (goalsSection) goalsSection.style.display = 'block';
+
+    // Update streak badge
+    const streakBadge = document.getElementById('dailyStreak');
+    if (streakBadge) {
+      const currentStreak = streaks?.daily?.current || 0;
+      streakBadge.textContent = `🔥 ${currentStreak}`;
+      if (currentStreak >= 7) {
+        streakBadge.classList.add('hot-streak');
+      } else {
+        streakBadge.classList.remove('hot-streak');
+      }
+    }
+
+    // Update each goal progress bar
+    this.updateGoalItem('centerSources',
+      daily.progress?.centerSourcesRead || 0,
+      goals.daily?.minCenterSources || 1,
+      daily.results?.centerSources || false
+    );
+
+    this.updateGoalItem('educational',
+      daily.progress?.educationalPercent || 0,
+      goals.daily?.minEducationalPercent || 10,
+      daily.results?.educational || false,
+      '%'
+    );
+
+    this.updateGoalItem('diversity',
+      daily.progress?.uniqueDomains || 0,
+      goals.daily?.minUniqueDomains || 3,
+      daily.results?.diversity || false
+    );
+  }
+
+  updateGoalItem(id, current, target, isMet, suffix = '') {
+    const item = document.getElementById(`goal-${id}`);
+    if (!item) return;
+
+    const value = item.querySelector('.goal-value');
+    const fill = item.querySelector('.goal-fill');
+
+    if (value) {
+      value.textContent = suffix ? `${current}${suffix}` : `${current}/${target}`;
+    }
+
+    if (fill) {
+      const percent = Math.min((current / target) * 100, 100);
+      fill.style.width = `${percent}%`;
+
+      if (isMet) {
+        item.classList.add('goal-met');
+        fill.style.background = '#4CAF50';
+      } else {
+        item.classList.remove('goal-met');
+        fill.style.background = '#667EEA';
+      }
+    }
   }
 
   getWeekKey() {

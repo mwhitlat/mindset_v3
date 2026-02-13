@@ -139,7 +139,35 @@ class MindsetTracker {
         credibility: 7.0,
         contentTone: 7.4,
         politicalBalance: 7.8
-      }
+      },
+      goals: {
+        daily: {
+          enabled: true,
+          minCenterSources: 1,        // Read from at least 1 center-bias source
+          minEducationalPercent: 10,  // At least 10% educational content
+          maxNewsPercent: 60,         // No more than 60% news
+          minUniqueDomains: 3         // Visit at least 3 different sites
+        },
+        weekly: {
+          enabled: true,
+          minSourceDiversity: 10,     // 10+ unique domains
+          targetEducationalPercent: 20,
+          targetPoliticalBalance: 6   // Score of 6+ on political balance
+        }
+      },
+      streaks: {
+        daily: {
+          current: 0,
+          longest: 0,
+          lastMetDate: null           // ISO date string "2024-01-20"
+        },
+        weekly: {
+          current: 0,
+          longest: 0,
+          lastMetWeek: null           // Week key "2024-01-14"
+        }
+      },
+      dailyProgress: {}               // Keyed by ISO date
     };
   }
 
@@ -683,6 +711,9 @@ class MindsetTracker {
     // Engagement hooks
     this.checkAndShowNotifications(visitData);
     this.updateSessionInsights();
+
+    // Update daily goals progress and streaks
+    this.updateStreaks();
   }
 
   saveSiteVisit(siteData) {
@@ -702,6 +733,202 @@ class MindsetTracker {
     const now = new Date();
     const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()));
     return startOfWeek.toISOString().split('T')[0];
+  }
+
+  // Get today's date key
+  getTodayKey() {
+    return new Date().toISOString().split('T')[0];
+  }
+
+  // Calculate today's progress toward daily goals
+  getDailyProgress(dateKey = null) {
+    const today = dateKey || this.getTodayKey();
+    const weekKey = this.getWeekKey();
+    const weekData = this.userData.weeklyData[weekKey];
+
+    if (!weekData || !weekData.visits) {
+      return this.getEmptyDailyProgress();
+    }
+
+    // Filter visits from today
+    const todayStart = new Date(today).setHours(0, 0, 0, 0);
+    const todayEnd = new Date(today).setHours(23, 59, 59, 999);
+    const todayVisits = weekData.visits.filter(v =>
+      v.timestamp >= todayStart && v.timestamp <= todayEnd
+    );
+
+    if (todayVisits.length === 0) {
+      return this.getEmptyDailyProgress();
+    }
+
+    // Calculate metrics
+    const uniqueDomains = new Set(todayVisits.map(v => v.domain)).size;
+    const centerSources = todayVisits.filter(v =>
+      ['center', 'left-center', 'right-center'].includes(v.politicalBias)
+    ).length;
+
+    const categories = {};
+    todayVisits.forEach(v => {
+      if (v.category) {
+        categories[v.category] = (categories[v.category] || 0) + 1;
+      }
+    });
+
+    const total = todayVisits.length;
+    const educationalPercent = Math.round((categories.educational || 0) / total * 100);
+    const newsPercent = Math.round((categories.news || 0) / total * 100);
+
+    return {
+      centerSourcesRead: centerSources,
+      educationalPercent,
+      newsPercent,
+      uniqueDomains,
+      totalVisits: todayVisits.length,
+      timestamp: Date.now()
+    };
+  }
+
+  getEmptyDailyProgress() {
+    return {
+      centerSourcesRead: 0,
+      educationalPercent: 0,
+      newsPercent: 0,
+      uniqueDomains: 0,
+      totalVisits: 0,
+      timestamp: Date.now()
+    };
+  }
+
+  // Check if daily goals are met
+  checkDailyGoals() {
+    const goals = this.userData.goals?.daily;
+    if (!goals || !goals.enabled) {
+      return { allMet: true, results: {}, progress: this.getEmptyDailyProgress() };
+    }
+
+    const progress = this.getDailyProgress();
+
+    const results = {
+      centerSources: progress.centerSourcesRead >= goals.minCenterSources,
+      educational: progress.educationalPercent >= goals.minEducationalPercent,
+      newsLimit: progress.newsPercent <= goals.maxNewsPercent,
+      diversity: progress.uniqueDomains >= goals.minUniqueDomains
+    };
+
+    const allMet = Object.values(results).every(v => v);
+
+    return { allMet, results, progress };
+  }
+
+  // Check if weekly goals are met
+  checkWeeklyGoals() {
+    const goals = this.userData.goals?.weekly;
+    if (!goals || !goals.enabled) {
+      return { allMet: true, results: {} };
+    }
+
+    const weekKey = this.getWeekKey();
+    const weekData = this.userData.weeklyData[weekKey];
+    if (!weekData) {
+      return { allMet: false, results: {} };
+    }
+
+    const results = {
+      diversity: (weekData.domains?.size || 0) >= goals.minSourceDiversity,
+      educational: this.getEducationalPercent(weekData) >= goals.targetEducationalPercent,
+      politicalBalance: (weekData.scores?.politicalBalance || 0) >= goals.targetPoliticalBalance
+    };
+
+    const allMet = Object.values(results).every(v => v);
+
+    return { allMet, results };
+  }
+
+  // Helper to get educational percentage for a week
+  getEducationalPercent(weekData) {
+    if (!weekData.categories) return 0;
+    const total = Object.values(weekData.categories).reduce((sum, c) => sum + c, 0);
+    if (total === 0) return 0;
+    return Math.round((weekData.categories.educational || 0) / total * 100);
+  }
+
+  // Update daily and weekly streaks
+  updateStreaks() {
+    const today = this.getTodayKey();
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+
+    // Ensure streaks structure exists
+    if (!this.userData.streaks) {
+      this.userData.streaks = {
+        daily: { current: 0, longest: 0, lastMetDate: null },
+        weekly: { current: 0, longest: 0, lastMetWeek: null }
+      };
+    }
+
+    // Daily streak
+    const dailyCheck = this.checkDailyGoals();
+    if (dailyCheck.allMet && dailyCheck.progress.totalVisits > 0) {
+      const lastMet = this.userData.streaks.daily.lastMetDate;
+
+      if (lastMet === yesterday) {
+        // Consecutive day - increment streak
+        this.userData.streaks.daily.current++;
+      } else if (lastMet !== today) {
+        // Streak broken or first time - reset to 1
+        this.userData.streaks.daily.current = 1;
+      }
+
+      this.userData.streaks.daily.lastMetDate = today;
+      this.userData.streaks.daily.longest = Math.max(
+        this.userData.streaks.daily.longest,
+        this.userData.streaks.daily.current
+      );
+    }
+
+    // Ensure dailyProgress structure exists
+    if (!this.userData.dailyProgress) {
+      this.userData.dailyProgress = {};
+    }
+
+    // Save daily progress
+    this.userData.dailyProgress[today] = {
+      ...dailyCheck.progress,
+      allGoalsMet: dailyCheck.allMet
+    };
+
+    // Weekly streak (check on week change)
+    this.updateWeeklyStreak();
+
+    this.saveTrackingState();
+  }
+
+  updateWeeklyStreak() {
+    const currentWeek = this.getWeekKey();
+    const weeklyCheck = this.checkWeeklyGoals();
+
+    if (weeklyCheck.allMet) {
+      const lastMet = this.userData.streaks.weekly.lastMetWeek;
+      const lastMetDate = lastMet ? new Date(lastMet) : null;
+      const currentDate = new Date(currentWeek);
+
+      // Check if this is a consecutive week
+      if (lastMetDate) {
+        const daysDiff = (currentDate - lastMetDate) / (1000 * 60 * 60 * 24);
+        if (daysDiff === 7) {
+          this.userData.streaks.weekly.current++;
+        } else if (daysDiff > 7) {
+          this.userData.streaks.weekly.current = 1;
+        }
+      } else {
+        this.userData.streaks.weekly.current = 1;
+      }
+
+      this.userData.streaks.weekly.lastMetWeek = currentWeek;
+      this.userData.streaks.weekly.longest = Math.max(
+        this.userData.streaks.weekly.longest,
+        this.userData.streaks.weekly.current
+      );
+    }
   }
 
   calculateScores(weekKey) {
@@ -1263,6 +1490,31 @@ class MindsetTracker {
         }).catch(error => {
           sendResponse({ success: false, error: error.message });
         });
+        break;
+
+      case 'getGoalsProgress':
+        const dailyGoals = this.checkDailyGoals();
+        const weeklyGoals = this.checkWeeklyGoals();
+        const defaultGoals = {
+          daily: { enabled: true, minCenterSources: 1, minEducationalPercent: 10, maxNewsPercent: 60, minUniqueDomains: 3 },
+          weekly: { enabled: true, minSourceDiversity: 10, targetEducationalPercent: 20, targetPoliticalBalance: 6 }
+        };
+        sendResponse({
+          daily: dailyGoals,
+          weekly: weeklyGoals,
+          streaks: this.userData.streaks || { daily: { current: 0, longest: 0 }, weekly: { current: 0, longest: 0 } },
+          goals: this.userData.goals || defaultGoals
+        });
+        break;
+
+      case 'updateGoals':
+        if (request.goals && typeof request.goals === 'object') {
+          this.userData.goals = { ...this.userData.goals, ...request.goals };
+          await this.saveTrackingState();
+          sendResponse({ success: true });
+        } else {
+          sendResponse({ error: 'Invalid goals data' });
+        }
         break;
 
       default:
