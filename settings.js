@@ -35,6 +35,11 @@ class SettingsManager {
       this.showClearDataConfirmation();
     });
 
+    // Import history
+    document.getElementById('importHistoryBtn').addEventListener('click', () => {
+      this.importBrowserHistory();
+    });
+
     // Encryption controls
     document.getElementById('dataEncryption').addEventListener('change', (e) => {
       this.handleEncryptionToggle(e.target.checked);
@@ -467,11 +472,69 @@ class SettingsManager {
       link.download = `mindset-data-${new Date().toISOString().split('T')[0]}.json`;
       link.click();
       URL.revokeObjectURL(url);
-      
+
       this.showSuccessMessage('Data exported successfully!');
     } catch (error) {
       console.error('Error exporting data:', error);
       this.showErrorMessage('Failed to export data');
+    }
+  }
+
+  async importBrowserHistory() {
+    const btn = document.getElementById('importHistoryBtn');
+    const btnText = document.getElementById('importHistoryBtnText');
+    const statusItem = document.getElementById('importHistoryStatus');
+    const statusMessage = document.getElementById('importHistoryMessage');
+
+    try {
+      // Check if we already have the history permission
+      const hasPermission = await chrome.permissions.contains({ permissions: ['history'] });
+
+      if (!hasPermission) {
+        // Request the permission
+        btnText.textContent = 'Requesting permission...';
+        btn.disabled = true;
+
+        const granted = await chrome.permissions.request({ permissions: ['history'] });
+
+        if (!granted) {
+          btn.disabled = false;
+          btnText.textContent = 'Import History';
+          this.showErrorMessage('History permission denied. Please allow access to import your browsing history.');
+          return;
+        }
+      }
+
+      // Show importing state
+      btnText.textContent = 'Importing...';
+      btn.disabled = true;
+      statusItem.style.display = 'block';
+      statusMessage.textContent = 'Importing your browser history. This may take a moment...';
+      statusMessage.className = 'import-status-message importing';
+
+      // Call the import
+      const result = await this.sendMessage({ action: 'importBrowserHistory', days: 90 });
+
+      if (result.success) {
+        statusMessage.textContent = `Successfully imported ${result.imported} visits from your browser history.`;
+        statusMessage.className = 'import-status-message success';
+        this.showSuccessMessage(`Imported ${result.imported} visits!`);
+
+        // Reload user data to reflect changes
+        await this.loadData();
+      } else {
+        statusMessage.textContent = `Import failed: ${result.error}`;
+        statusMessage.className = 'import-status-message error';
+        this.showErrorMessage(`Import failed: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error importing browser history:', error);
+      statusMessage.textContent = `Import failed: ${error.message}`;
+      statusMessage.className = 'import-status-message error';
+      this.showErrorMessage('Failed to import browser history');
+    } finally {
+      btn.disabled = false;
+      btnText.textContent = 'Import History';
     }
   }
 
