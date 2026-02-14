@@ -27,10 +27,18 @@ class BrowserStatusIndicator {
     // Load user settings for warning preferences
     await this.loadUserSettings();
 
+    // Wait a bit for background script to track the page visit first
+    await new Promise(resolve => setTimeout(resolve, 500));
+
     // Get page data from background script
     this.getPageData();
     // Get weekly summary from background script
     this.getWeeklySummary();
+
+    // Refresh echo status after a bit more time to ensure tracking is complete
+    setTimeout(() => {
+      this.checkEchoChamberBreaker();
+    }, 2000);
 
     // Create and inject the status indicator
     this.createStatusIndicator();
@@ -447,6 +455,10 @@ class BrowserStatusIndicator {
         domain: window.location.hostname
       });
 
+      // Store status for debug display
+      this.echoChamberStatus = response;
+      this.updateEchoDebugRow();
+
       if (response && response.enabled && response.inDebt) {
         this.showEchoChamberBreakerInterstitial(response);
       } else {
@@ -456,6 +468,54 @@ class BrowserStatusIndicator {
     } catch (error) {
       console.error('Error checking echo chamber breaker status:', error);
     }
+  }
+
+  updateEchoDebugRow() {
+    if (!this.echoDebugRow) return;
+
+    const status = this.echoChamberStatus;
+    if (!status) {
+      this.echoDebugRow.innerHTML = '<span>🔄 Echo tracker: loading...</span>';
+      return;
+    }
+
+    if (!status.enabled) {
+      this.echoDebugRow.innerHTML = '<span>🔇 Echo breaker: disabled</span>';
+      return;
+    }
+
+    const biasHistory = status.recentBiasHistory || [];
+    // History items are objects with {bias, timestamp} structure
+    const historyDisplay = biasHistory.slice(-5).map(item => {
+      const b = item.bias || item; // Handle both object and string formats
+      if (b === 'left') return '🔵L';
+      if (b === 'right') return '🔴R';
+      if (b === 'center') return '🟡C';
+      return '⚪?';
+    }).join(' → ');
+
+    const consecutiveCount = status.consecutiveCount || 0;
+    const threshold = status.threshold || 5;
+    const dominantBias = status.dominantBias || 'none';
+    const inDebt = status.inDebt || false;
+    const currentPageBias = status.currentPageBias || 'unknown';
+
+    let debtStatus;
+    if (status.debtClearedByThisPage) {
+      debtStatus = '<span style="color:#4CAF50;">✓ CLEARED!</span>';
+    } else if (inDebt) {
+      debtStatus = `<span style="color:#FF5252;">⚠️ IN DEBT (${status.debtBias})</span>`;
+    } else {
+      debtStatus = '<span style="color:#4CAF50;">✓ OK</span>';
+    }
+
+    this.echoDebugRow.innerHTML = `
+      <span>🎯 Echo: ${consecutiveCount}/${threshold}</span>
+      <span>| Bias: ${dominantBias}</span>
+      <span>| This page: ${currentPageBias}</span>
+      <span>| ${debtStatus}</span>
+      <span>| Recent: ${historyDisplay || 'none'}</span>
+    `;
   }
 
   showEchoChamberBreakerInterstitial(breakerStatus) {
@@ -502,6 +562,8 @@ class BrowserStatusIndicator {
         const safeBias = this.escapeHtml(alt.bias || 'center');
         return `
           <a href="${this.escapeHtml(alt.url)}"
+             target="_self"
+             rel="noopener"
              class="mindset-breaker-alt"
              style="
                display: flex;
@@ -886,8 +948,13 @@ class BrowserStatusIndicator {
     this.longTermRow = document.createElement('div');
     this.longTermRow.style.cssText = 'display: flex; align-items: center; gap: 12px; margin: 2px 0; opacity: 0.85; font-size: 10px;';
 
+    // Echo chamber debug row
+    this.echoDebugRow = document.createElement('div');
+    this.echoDebugRow.style.cssText = 'display: flex; align-items: center; gap: 12px; margin: 2px 0; opacity: 0.85; font-size: 10px; color: #FFD54F;';
+
     this.contentContainer.appendChild(this.shortTermRow);
     this.contentContainer.appendChild(this.longTermRow);
+    this.contentContainer.appendChild(this.echoDebugRow);
 
     // Add minimize button
     this.minimizeBtn = document.createElement('button');

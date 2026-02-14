@@ -44,7 +44,10 @@ class MindsetTracker {
 
     // Load tracking state from storage
     try {
-      const result = await chrome.storage.local.get(['isTracking', 'userData', 'encryptedData', 'encryptionEnabled', 'encryptionSalt']);
+      const result = await chrome.storage.local.get([
+        'isTracking', 'userData', 'encryptedData', 'encryptionEnabled', 'encryptionSalt',
+        'recentBiasHistory', 'echoChamberDebt', 'echoChamberDebtBias', 'echoChamberDebtTimestamp'
+      ]);
 
       if (result.encryptionEnabled && result.encryptedData) {
         // Handle encrypted data
@@ -54,10 +57,20 @@ class MindsetTracker {
         const decryptedData = await this.decryptData(result.encryptedData);
         this.isTracking = decryptedData.isTracking !== false;
         this.userData = decryptedData.userData || this.initializeUserData();
+        // Restore echo chamber state from encrypted data
+        this.recentBiasHistory = decryptedData.recentBiasHistory || [];
+        this.echoChamberDebt = decryptedData.echoChamberDebt || false;
+        this.echoChamberDebtBias = decryptedData.echoChamberDebtBias || null;
+        this.echoChamberDebtTimestamp = decryptedData.echoChamberDebtTimestamp || null;
       } else {
         // Handle unencrypted data
         this.isTracking = result.isTracking !== false;
         this.userData = result.userData || this.initializeUserData();
+        // Restore echo chamber state
+        this.recentBiasHistory = result.recentBiasHistory || [];
+        this.echoChamberDebt = result.echoChamberDebt || false;
+        this.echoChamberDebtBias = result.echoChamberDebtBias || null;
+        this.echoChamberDebtTimestamp = result.echoChamberDebtTimestamp || null;
       }
       
       // Initialize empty weekly data if none exists
@@ -624,6 +637,7 @@ class MindsetTracker {
 
           alternatives.push({
             domain,
+            url: `https://${domain}`,
             name: info.name,
             bias: info.bias,
             credibility: info.credibility,
@@ -711,8 +725,12 @@ class MindsetTracker {
     // Echo chamber detection and breaker
     if (visitData.politicalBias && visitData.politicalBias !== 'unknown') {
       // Check if this visit clears echo chamber debt
+      let debtJustCleared = false;
       if (this.echoChamberDebt && this.checkBiasClearsDebt(visitData.politicalBias)) {
         this.clearEchoChamberDebt();
+        debtJustCleared = true;
+        // Reset bias history when debt is cleared to start fresh
+        this.recentBiasHistory = [];
       }
 
       const echoChamberStatus = this.trackBiasHistory(visitData.politicalBias);
@@ -720,14 +738,18 @@ class MindsetTracker {
       const breakerThreshold = this.userData?.settings?.echoChamberBreakerThreshold || 5;
 
       // Set debt if breaker is enabled and threshold exceeded
-      if (breakerEnabled && echoChamberStatus.consecutiveCount >= breakerThreshold && !this.echoChamberDebt) {
+      // Don't immediately re-set debt if it was just cleared
+      if (breakerEnabled && echoChamberStatus.consecutiveCount >= breakerThreshold && !this.echoChamberDebt && !debtJustCleared) {
         this.setEchoChamberDebt(echoChamberStatus.dominantBias);
       }
 
-      // Show notification alert (legacy behavior)
-      if (echoChamberStatus.isEchoChamber || echoChamberStatus.consecutiveCount >= 5) {
+      // Show notification alert (legacy behavior) - skip if debt just cleared
+      if (!debtJustCleared && (echoChamberStatus.isEchoChamber || echoChamberStatus.consecutiveCount >= 5)) {
         this.showEchoChamberAlert(echoChamberStatus);
       }
+
+      // Persist echo chamber state
+      this.saveTrackingState();
     }
 
     // Engagement hooks
@@ -1524,11 +1546,19 @@ class MindsetTracker {
         break;
 
       case 'getEchoChamberBreakerStatus':
-        // If a domain is provided, check if visiting it would clear debt
-        if (request.domain && this.echoChamberDebt) {
-          const pageBias = this.assessPoliticalBias(request.domain);
-          if (pageBias && this.checkBiasClearsDebt(pageBias)) {
+        // Get current page bias for debug display
+        let currentPageBias = 'unknown';
+        let debtClearedByThisPage = false;
+        if (request.domain) {
+          const rawBias = this.assessPoliticalBias(request.domain);
+          currentPageBias = rawBias || 'unknown';
+
+          // If in debt, check if visiting this page would clear it
+          if (this.echoChamberDebt && rawBias && this.checkBiasClearsDebt(rawBias)) {
             this.clearEchoChamberDebt();
+            this.recentBiasHistory = []; // Reset history when debt cleared
+            debtClearedByThisPage = true;
+            this.saveTrackingState(); // Persist the cleared state
           }
         }
         const breakerStatus = this.getEchoChamberBreakerStatus();
@@ -1537,7 +1567,10 @@ class MindsetTracker {
           : [];
         sendResponse({
           ...breakerStatus,
-          alternatives: breakerAlternatives
+          alternatives: breakerAlternatives,
+          recentBiasHistory: this.recentBiasHistory || [],
+          currentPageBias,
+          debtClearedByThisPage
         });
         break;
 
@@ -1790,7 +1823,12 @@ class MindsetTracker {
       const dataToStore = {
         isTracking: this.isTracking,
         userData: this.prepareDataForStorage(this.userData),
-        encryptionEnabled: this.encryptionEnabled
+        encryptionEnabled: this.encryptionEnabled,
+        // Echo chamber tracking state (persists across service worker restarts)
+        recentBiasHistory: this.recentBiasHistory || [],
+        echoChamberDebt: this.echoChamberDebt || false,
+        echoChamberDebtBias: this.echoChamberDebtBias || null,
+        echoChamberDebtTimestamp: this.echoChamberDebtTimestamp || null
       };
 
       if (this.encryptionEnabled) {
