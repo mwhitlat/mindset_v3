@@ -16,6 +16,9 @@ class BrowserStatusIndicator {
     this.autoHideTimeout = null;
     this.hoverZone = null;
     this.minimizedIndicator = null;
+    // Credibility budget state
+    this.credibilityBudgetStatus = null;
+    this.credibilityBudgetInterstitialShown = false;
     this.init();
   }
 
@@ -35,9 +38,10 @@ class BrowserStatusIndicator {
     // Get weekly summary from background script
     this.getWeeklySummary();
 
-    // Refresh echo status after a bit more time to ensure tracking is complete
+    // Refresh status after a bit more time to ensure tracking is complete
     setTimeout(() => {
       this.checkEchoChamberBreaker();
+      this.checkCredibilityBudget();
     }, 2000);
 
     // Create and inject the status indicator
@@ -695,6 +699,214 @@ class BrowserStatusIndicator {
     // Note: We don't clear debt here - user chose to skip, debt remains
   }
 
+  /**
+   * Credibility Budget - check if user has exceeded their daily low-credibility allowance
+   */
+  async checkCredibilityBudget() {
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'getCredibilityBudgetStatus',
+        domain: window.location.hostname
+      });
+
+      // Store status for debug display
+      this.credibilityBudgetStatus = response;
+      this.updateCredibilityDebugRow();
+
+      if (response && response.enabled && response.exceeded) {
+        this.showCredibilityBudgetInterstitial(response);
+      } else {
+        // Reset flag if not exceeded (allows showing again if exceeded later)
+        this.credibilityBudgetInterstitialShown = false;
+      }
+    } catch (error) {
+      console.error('Error checking credibility budget status:', error);
+    }
+  }
+
+  updateCredibilityDebugRow() {
+    if (!this.credibilityDebugRow) return;
+
+    const status = this.credibilityBudgetStatus;
+    if (!status) {
+      this.credibilityDebugRow.innerHTML = '<span>🔄 Budget: loading...</span>';
+      return;
+    }
+
+    if (!status.enabled) {
+      this.credibilityDebugRow.innerHTML = '<span>🔇 Credibility budget: disabled</span>';
+      return;
+    }
+
+    const used = status.used || 0;
+    const limit = status.limit || 3;
+    const exceeded = status.exceeded || false;
+    const currentCred = status.currentPageCredibility;
+    const credDisplay = currentCred !== null ? currentCred.toFixed(1) : '?';
+
+    let budgetStatusText;
+    if (status.budgetClearedByThisPage) {
+      budgetStatusText = '<span style="color:#4CAF50;">✓ RESTORED!</span>';
+    } else if (exceeded) {
+      budgetStatusText = '<span style="color:#FF5252;">⚠️ EXCEEDED</span>';
+    } else {
+      budgetStatusText = '<span style="color:#4CAF50;">✓ OK</span>';
+    }
+
+    this.credibilityDebugRow.innerHTML = `
+      <span>📊 Budget: ${used}/${limit}</span>
+      <span>| This page: ${credDisplay}/10</span>
+      <span>| ${budgetStatusText}</span>
+    `;
+  }
+
+  showCredibilityBudgetInterstitial(budgetStatus) {
+    // Don't show if already showing
+    if (this.credibilityBudgetInterstitialShown) {
+      return;
+    }
+    this.credibilityBudgetInterstitialShown = true;
+
+    // Remove existing interstitial if any
+    const existing = document.getElementById('mindset-credibility-budget');
+    if (existing) {
+      existing.remove();
+    }
+
+    this.credibilityBudgetInterstitial = document.createElement('div');
+    this.credibilityBudgetInterstitial.id = 'mindset-credibility-budget';
+    this.credibilityBudgetInterstitial.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(135deg, rgba(244, 67, 54, 0.97) 0%, rgba(183, 28, 28, 0.97) 100%);
+      z-index: 2147483647;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: white;
+      text-align: center;
+      padding: 40px;
+    `;
+
+    // Build alternatives HTML
+    let alternativesHtml = '';
+    if (budgetStatus.alternatives && budgetStatus.alternatives.length > 0) {
+      alternativesHtml = budgetStatus.alternatives.map(alt => {
+        const safeName = this.escapeHtml(alt.name);
+        const safeCredibility = alt.credibility ? alt.credibility.toFixed(1) : '8.0';
+        return `
+          <a href="${this.escapeHtml(alt.url)}"
+             target="_self"
+             rel="noopener"
+             class="mindset-budget-alt"
+             style="
+               display: flex;
+               align-items: center;
+               justify-content: space-between;
+               padding: 16px 20px;
+               background: rgba(255,255,255,0.15);
+               border-radius: 12px;
+               color: white;
+               text-decoration: none;
+               transition: all 0.2s ease;
+               margin-bottom: 12px;
+             "
+             onmouseover="this.style.background='rgba(255,255,255,0.25)'; this.style.transform='translateX(5px)';"
+             onmouseout="this.style.background='rgba(255,255,255,0.15)'; this.style.transform='translateX(0)';">
+            <span style="font-weight: 600; font-size: 16px;">${safeName}</span>
+            <span style="
+              background: rgba(76, 175, 80, 0.3);
+              padding: 4px 10px;
+              border-radius: 20px;
+              font-size: 12px;
+            ">⭐ ${safeCredibility}/10</span>
+          </a>
+        `;
+      }).join('');
+    }
+
+    this.credibilityBudgetInterstitial.innerHTML = `
+      <div style="max-width: 500px;">
+        <div style="font-size: 64px; margin-bottom: 20px;">📊</div>
+        <h1 style="font-size: 28px; font-weight: 700; margin-bottom: 16px;">
+          Daily Credibility Budget Exceeded
+        </h1>
+        <p style="font-size: 18px; opacity: 0.9; margin-bottom: 8px;">
+          You've visited <strong>${budgetStatus.used} low-credibility sources</strong> today (limit: ${budgetStatus.limit}).
+        </p>
+        <p style="font-size: 16px; opacity: 0.8; margin-bottom: 32px;">
+          Visit a high-credibility source (8.0+) to restore your budget, or wait until tomorrow.
+        </p>
+
+        ${alternativesHtml ? `
+          <div style="margin-bottom: 24px;">
+            <p style="font-size: 14px; opacity: 0.7; margin-bottom: 12px;">SUGGESTED HIGH-CREDIBILITY SOURCES:</p>
+            ${alternativesHtml}
+          </div>
+        ` : ''}
+
+        <div style="margin-top: 24px;">
+          <button id="mindset-budget-skip" style="
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: rgba(255,255,255,0.5);
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: not-allowed;
+            transition: all 0.3s ease;
+          " disabled>
+            Continue anyway (10)
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(this.credibilityBudgetInterstitial);
+
+    // Start countdown for skip button
+    this.startBudgetSkipCountdown();
+  }
+
+  startBudgetSkipCountdown() {
+    const skipBtn = document.getElementById('mindset-budget-skip');
+    if (!skipBtn) return;
+
+    let countdown = 10;
+    this.budgetCountdownInterval = setInterval(() => {
+      countdown--;
+      if (countdown <= 0) {
+        clearInterval(this.budgetCountdownInterval);
+        skipBtn.textContent = 'Continue anyway';
+        skipBtn.style.cursor = 'pointer';
+        skipBtn.style.color = 'rgba(255,255,255,0.9)';
+        skipBtn.style.background = 'rgba(255,255,255,0.2)';
+        skipBtn.disabled = false;
+        skipBtn.onclick = () => {
+          this.hideCredibilityBudgetInterstitial();
+        };
+      } else {
+        skipBtn.textContent = `Continue anyway (${countdown})`;
+      }
+    }, 1000);
+  }
+
+  hideCredibilityBudgetInterstitial() {
+    if (this.credibilityBudgetInterstitial) {
+      this.credibilityBudgetInterstitial.remove();
+      this.credibilityBudgetInterstitial = null;
+    }
+    if (this.budgetCountdownInterval) {
+      clearInterval(this.budgetCountdownInterval);
+    }
+    // Note: We don't clear exceeded state here - user chose to skip
+  }
+
   showAlternativesPanel(alternatives, currentSource) {
     // Remove existing panel if any
     const existingPanel = document.getElementById('mindset-alternatives-panel');
@@ -873,6 +1085,9 @@ class BrowserStatusIndicator {
       // Check for Echo Chamber Breaker debt first
       await this.checkEchoChamberBreaker();
 
+      // Check for Credibility Budget exceeded
+      await this.checkCredibilityBudget();
+
       // Extract basic page info
       const pageInfo = {
         domain: window.location.hostname,
@@ -952,9 +1167,14 @@ class BrowserStatusIndicator {
     this.echoDebugRow = document.createElement('div');
     this.echoDebugRow.style.cssText = 'display: flex; align-items: center; gap: 12px; margin: 2px 0; opacity: 0.85; font-size: 10px; color: #FFD54F;';
 
+    // Credibility budget debug row
+    this.credibilityDebugRow = document.createElement('div');
+    this.credibilityDebugRow.style.cssText = 'display: flex; align-items: center; gap: 12px; margin: 2px 0; opacity: 0.85; font-size: 10px; color: #81D4FA;';
+
     this.contentContainer.appendChild(this.shortTermRow);
     this.contentContainer.appendChild(this.longTermRow);
     this.contentContainer.appendChild(this.echoDebugRow);
+    this.contentContainer.appendChild(this.credibilityDebugRow);
 
     // Add minimize button
     this.minimizeBtn = document.createElement('button');

@@ -526,6 +526,49 @@
 
                         <div class="setting-item">
                             <div class="setting-info">
+                                <h4>Credibility Budget</h4>
+                                <p>Limit daily visits to low-credibility sources</p>
+                            </div>
+                            <div class="setting-control">
+                                <label class="toggle">
+                                    <input type="checkbox" id="enableCredibilityBudget" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Daily Budget Limit</h4>
+                                <p>Maximum low-credibility sources allowed per day</p>
+                            </div>
+                            <div class="setting-control">
+                                <select id="credibilityBudgetLimit" class="select-control">
+                                    <option value="1">1 source</option>
+                                    <option value="2">2 sources</option>
+                                    <option value="3" selected>3 sources</option>
+                                    <option value="5">5 sources</option>
+                                    <option value="10">10 sources</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Low Credibility Threshold</h4>
+                                <p>Sources below this score count against your budget</p>
+                            </div>
+                            <div class="setting-control">
+                                <select id="lowCredibilityThreshold" class="select-control">
+                                    <option value="5.0">5.0 (Strict)</option>
+                                    <option value="6.0" selected>6.0 (Balanced)</option>
+                                    <option value="7.0">7.0 (Lenient)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
                                 <h4>Session Insights</h4>
                                 <p>Get insights about your browsing sessions every 30 minutes</p>
                             </div>

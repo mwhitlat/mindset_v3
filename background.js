@@ -28,6 +28,11 @@ class MindsetTracker {
     this.echoChamberDebtBias = null;     // Which bias caused the debt ('left' or 'right')
     this.echoChamberDebtTimestamp = null; // When debt was incurred
 
+    // Credibility Budget - limits daily low-credibility source visits
+    this.credibilityBudgetUsed = 0;      // How many low-credibility visits today
+    this.credibilityBudgetDate = null;   // Date of current budget period (ISO date string)
+    this.credibilityBudgetExceeded = false; // Is user over budget?
+
     // Engagement hooks
     this.notificationCooldowns = new Map();
     this.lastBadgeUpdate = 0;
@@ -46,7 +51,8 @@ class MindsetTracker {
     try {
       const result = await chrome.storage.local.get([
         'isTracking', 'userData', 'encryptedData', 'encryptionEnabled', 'encryptionSalt',
-        'recentBiasHistory', 'echoChamberDebt', 'echoChamberDebtBias', 'echoChamberDebtTimestamp'
+        'recentBiasHistory', 'echoChamberDebt', 'echoChamberDebtBias', 'echoChamberDebtTimestamp',
+        'credibilityBudgetUsed', 'credibilityBudgetDate', 'credibilityBudgetExceeded'
       ]);
 
       if (result.encryptionEnabled && result.encryptedData) {
@@ -62,6 +68,10 @@ class MindsetTracker {
         this.echoChamberDebt = decryptedData.echoChamberDebt || false;
         this.echoChamberDebtBias = decryptedData.echoChamberDebtBias || null;
         this.echoChamberDebtTimestamp = decryptedData.echoChamberDebtTimestamp || null;
+        // Restore credibility budget state from encrypted data
+        this.credibilityBudgetUsed = decryptedData.credibilityBudgetUsed || 0;
+        this.credibilityBudgetDate = decryptedData.credibilityBudgetDate || null;
+        this.credibilityBudgetExceeded = decryptedData.credibilityBudgetExceeded || false;
       } else {
         // Handle unencrypted data
         this.isTracking = result.isTracking !== false;
@@ -71,7 +81,14 @@ class MindsetTracker {
         this.echoChamberDebt = result.echoChamberDebt || false;
         this.echoChamberDebtBias = result.echoChamberDebtBias || null;
         this.echoChamberDebtTimestamp = result.echoChamberDebtTimestamp || null;
+        // Restore credibility budget state
+        this.credibilityBudgetUsed = result.credibilityBudgetUsed || 0;
+        this.credibilityBudgetDate = result.credibilityBudgetDate || null;
+        this.credibilityBudgetExceeded = result.credibilityBudgetExceeded || false;
       }
+
+      // Reset credibility budget if it's a new day
+      this.checkAndResetDailyBudget();
       
       // Initialize empty weekly data if none exists
       if (!this.userData.weeklyData) {
@@ -146,6 +163,10 @@ class MindsetTracker {
         // Echo Chamber Breaker settings
         enableEchoChamberBreaker: true, // Require diverse perspective after consecutive same-bias
         echoChamberBreakerThreshold: 5, // How many consecutive same-bias before triggering
+        // Credibility Budget settings
+        enableCredibilityBudget: true,  // Limit daily low-credibility source visits
+        credibilityBudgetLimit: 3,      // Max low-credibility visits per day
+        lowCredibilityThreshold: 6.0,   // Sources below this score count against budget
         // Content warning settings
         interventionLevel: 'balanced', // 'minimal', 'balanced', 'strict'
         showCredibilityWarnings: true,
@@ -653,6 +674,44 @@ class MindsetTracker {
       .slice(0, 3);
   }
 
+  /**
+   * Get high-credibility sources for credibility budget alternatives
+   */
+  getHighCredibilitySources() {
+    const alternatives = [];
+    const seenNames = new Set();
+
+    if (!this.mediaSources) return alternatives;
+
+    // Find high-credibility sources (8.0+)
+    for (const [domain, info] of Object.entries(this.mediaSources)) {
+      // Only include news, fact-check, or science categories
+      const validCategories = ['news', 'fact-check', 'science', 'educational'];
+      if (!validCategories.includes(info.category)) continue;
+
+      // Only include high-credibility sources
+      if (info.credibility >= 8.0) {
+        // Deduplicate by source name
+        if (seenNames.has(info.name)) continue;
+        seenNames.add(info.name);
+
+        alternatives.push({
+          domain,
+          url: `https://${domain}`,
+          name: info.name,
+          bias: info.bias || 'center',
+          credibility: info.credibility,
+          category: info.category
+        });
+      }
+    }
+
+    // Sort by credibility and return top 3
+    return alternatives
+      .sort((a, b) => b.credibility - a.credibility)
+      .slice(0, 3);
+  }
+
   assessTone(title, content = '') {
     const text = (title + ' ' + content).toLowerCase();
     
@@ -749,6 +808,20 @@ class MindsetTracker {
       }
 
       // Persist echo chamber state
+      this.saveTrackingState();
+    }
+
+    // Credibility budget tracking
+    if (visitData.credibility !== null && visitData.credibility !== undefined) {
+      // Check if high-credibility visit clears exceeded state
+      if (this.credibilityBudgetExceeded && this.checkCredibilityClearsBudget(visitData.credibility)) {
+        this.clearCredibilityBudgetExceeded();
+      }
+
+      // Track low-credibility visits against budget
+      this.trackLowCredibilityVisit(visitData.credibility);
+
+      // Persist credibility budget state
       this.saveTrackingState();
     }
 
@@ -1468,6 +1541,91 @@ class MindsetTracker {
     };
   }
 
+  /**
+   * Credibility Budget - check and reset daily budget
+   */
+  checkAndResetDailyBudget() {
+    const today = new Date().toISOString().split('T')[0];
+
+    if (this.credibilityBudgetDate !== today) {
+      // New day - reset budget
+      this.credibilityBudgetUsed = 0;
+      this.credibilityBudgetDate = today;
+      this.credibilityBudgetExceeded = false;
+      console.log('Credibility Budget: Reset for new day');
+    }
+  }
+
+  /**
+   * Track a low-credibility visit against the budget
+   */
+  trackLowCredibilityVisit(credibility) {
+    const threshold = this.userData?.settings?.lowCredibilityThreshold || 6.0;
+    const limit = this.userData?.settings?.credibilityBudgetLimit || 3;
+    const enabled = this.userData?.settings?.enableCredibilityBudget !== false;
+
+    if (!enabled) return;
+
+    // Ensure we're on the current day
+    this.checkAndResetDailyBudget();
+
+    // Check if this is a low-credibility source
+    if (credibility !== null && credibility < threshold) {
+      this.credibilityBudgetUsed++;
+      console.log(`Credibility Budget: Used ${this.credibilityBudgetUsed}/${limit}`);
+
+      // Check if budget exceeded
+      if (this.credibilityBudgetUsed > limit && !this.credibilityBudgetExceeded) {
+        this.credibilityBudgetExceeded = true;
+        console.log('Credibility Budget: Exceeded!');
+      }
+    }
+  }
+
+  /**
+   * Check if visiting a high-credibility source clears the exceeded state
+   */
+  checkCredibilityClearsBudget(credibility) {
+    const highCredThreshold = 8.0; // High-credibility sources can restore budget
+
+    if (this.credibilityBudgetExceeded && credibility !== null && credibility >= highCredThreshold) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Clear the exceeded state (user visited high-credibility source)
+   */
+  clearCredibilityBudgetExceeded() {
+    if (this.credibilityBudgetExceeded) {
+      console.log('Credibility Budget: Cleared by visiting high-credibility source');
+      this.credibilityBudgetExceeded = false;
+      // Optionally reduce the used count slightly as a reward
+      this.credibilityBudgetUsed = Math.max(0, this.credibilityBudgetUsed - 1);
+    }
+  }
+
+  /**
+   * Get credibility budget status for content scripts
+   */
+  getCredibilityBudgetStatus() {
+    this.checkAndResetDailyBudget();
+
+    const limit = this.userData?.settings?.credibilityBudgetLimit || 3;
+    const threshold = this.userData?.settings?.lowCredibilityThreshold || 6.0;
+    const enabled = this.userData?.settings?.enableCredibilityBudget !== false;
+
+    return {
+      enabled,
+      exceeded: this.credibilityBudgetExceeded,
+      used: this.credibilityBudgetUsed,
+      limit,
+      threshold,
+      remaining: Math.max(0, limit - this.credibilityBudgetUsed)
+    };
+  }
+
   handleTabActivation(activeInfo) {
     // Update current site tracking
     chrome.tabs.get(activeInfo.tabId, (tab) => {
@@ -1579,6 +1737,37 @@ class MindsetTracker {
         sendResponse({ success: true });
         break;
 
+      case 'getCredibilityBudgetStatus':
+        // Get current page credibility for debug display
+        let currentPageCredibility = null;
+        let budgetClearedByThisPage = false;
+        if (request.domain) {
+          currentPageCredibility = this.assessCredibility(request.domain);
+
+          // If exceeded, check if visiting this page would clear it
+          if (this.credibilityBudgetExceeded && currentPageCredibility !== null &&
+              this.checkCredibilityClearsBudget(currentPageCredibility)) {
+            this.clearCredibilityBudgetExceeded();
+            budgetClearedByThisPage = true;
+            this.saveTrackingState();
+          }
+        }
+        const budgetStatus = this.getCredibilityBudgetStatus();
+        const highCredSources = this.getHighCredibilitySources();
+        sendResponse({
+          ...budgetStatus,
+          alternatives: budgetStatus.exceeded ? highCredSources : [],
+          currentPageCredibility,
+          budgetClearedByThisPage
+        });
+        break;
+
+      case 'clearCredibilityBudgetExceeded':
+        this.clearCredibilityBudgetExceeded();
+        this.saveTrackingState();
+        sendResponse({ success: true });
+        break;
+
       case 'updateSettings':
         if (request.settings && typeof request.settings === 'object') {
           this.userData.settings = { ...this.userData.settings, ...this.sanitizeSettings(request.settings) };
@@ -1592,6 +1781,13 @@ class MindsetTracker {
       case 'clearAllData':
         this.userData = this.initializeUserData();
         this.recentBiasHistory = []; // Clear echo chamber tracking data
+        this.echoChamberDebt = false;
+        this.echoChamberDebtBias = null;
+        this.echoChamberDebtTimestamp = null;
+        // Clear credibility budget data
+        this.credibilityBudgetUsed = 0;
+        this.credibilityBudgetDate = null;
+        this.credibilityBudgetExceeded = false;
         this.saveTrackingState();
         sendResponse({ success: true });
         break;
@@ -1828,7 +2024,11 @@ class MindsetTracker {
         recentBiasHistory: this.recentBiasHistory || [],
         echoChamberDebt: this.echoChamberDebt || false,
         echoChamberDebtBias: this.echoChamberDebtBias || null,
-        echoChamberDebtTimestamp: this.echoChamberDebtTimestamp || null
+        echoChamberDebtTimestamp: this.echoChamberDebtTimestamp || null,
+        // Credibility budget state
+        credibilityBudgetUsed: this.credibilityBudgetUsed || 0,
+        credibilityBudgetDate: this.credibilityBudgetDate || null,
+        credibilityBudgetExceeded: this.credibilityBudgetExceeded || false
       };
 
       if (this.encryptionEnabled) {

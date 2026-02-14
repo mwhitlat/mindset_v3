@@ -183,6 +183,18 @@ class SettingsManager {
       this.updateSetting('echoChamberBreakerThreshold', parseInt(e.target.value));
     });
 
+    document.getElementById('enableCredibilityBudget').addEventListener('change', (e) => {
+      this.updateSetting('enableCredibilityBudget', e.target.checked);
+    });
+
+    document.getElementById('credibilityBudgetLimit').addEventListener('change', (e) => {
+      this.updateSetting('credibilityBudgetLimit', parseInt(e.target.value));
+    });
+
+    document.getElementById('lowCredibilityThreshold').addEventListener('change', (e) => {
+      this.updateSetting('lowCredibilityThreshold', parseFloat(e.target.value));
+    });
+
     document.getElementById('sessionInsights').addEventListener('change', (e) => {
       this.updateSetting('sessionInsights', e.target.checked);
     });
@@ -364,6 +376,15 @@ class SettingsManager {
     }
     if (settings.echoChamberBreakerThreshold !== undefined) {
       document.getElementById('echoChamberBreakerThreshold').value = settings.echoChamberBreakerThreshold;
+    }
+    if (settings.enableCredibilityBudget !== undefined) {
+      document.getElementById('enableCredibilityBudget').checked = settings.enableCredibilityBudget;
+    }
+    if (settings.credibilityBudgetLimit !== undefined) {
+      document.getElementById('credibilityBudgetLimit').value = settings.credibilityBudgetLimit;
+    }
+    if (settings.lowCredibilityThreshold !== undefined) {
+      document.getElementById('lowCredibilityThreshold').value = settings.lowCredibilityThreshold;
     }
     if (settings.sessionInsights !== undefined) {
       document.getElementById('sessionInsights').checked = settings.sessionInsights;
