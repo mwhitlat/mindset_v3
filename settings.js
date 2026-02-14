@@ -195,6 +195,14 @@ class SettingsManager {
       this.updateSetting('lowCredibilityThreshold', parseFloat(e.target.value));
     });
 
+    document.getElementById('enableSameStoryUpgrade').addEventListener('change', (e) => {
+      this.updateSetting('enableSameStoryUpgrade', e.target.checked);
+    });
+
+    document.getElementById('sameStoryThreshold').addEventListener('change', (e) => {
+      this.updateSetting('sameStoryThreshold', parseFloat(e.target.value));
+    });
+
     document.getElementById('sessionInsights').addEventListener('change', (e) => {
       this.updateSetting('sessionInsights', e.target.checked);
     });
@@ -385,6 +393,15 @@ class SettingsManager {
     }
     if (settings.lowCredibilityThreshold !== undefined) {
       document.getElementById('lowCredibilityThreshold').value = settings.lowCredibilityThreshold;
+    }
+    if (settings.enableSameStoryUpgrade !== undefined) {
+      document.getElementById('enableSameStoryUpgrade').checked = settings.enableSameStoryUpgrade;
+    }
+    if (settings.sameStoryThreshold !== undefined) {
+      const threshold = Number(settings.sameStoryThreshold);
+      if (!isNaN(threshold)) {
+        document.getElementById('sameStoryThreshold').value = threshold.toFixed(1);
+      }
     }
     if (settings.sessionInsights !== undefined) {
       document.getElementById('sessionInsights').checked = settings.sessionInsights;

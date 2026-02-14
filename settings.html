@@ -569,6 +569,34 @@
 
                         <div class="setting-item">
                             <div class="setting-info">
+                                <h4>Same-Story Upgrade</h4>
+                                <p>Suggest the same story from higher-credibility outlets</p>
+                            </div>
+                            <div class="setting-control">
+                                <label class="toggle">
+                                    <input type="checkbox" id="enableSameStoryUpgrade" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Upgrade Threshold</h4>
+                                <p>Show upgrade prompts when source credibility is below this score</p>
+                            </div>
+                            <div class="setting-control">
+                                <select id="sameStoryThreshold" class="select-control">
+                                    <option value="5.0">5.0 (Rare prompts)</option>
+                                    <option value="6.0">6.0</option>
+                                    <option value="7.0" selected>7.0 (Balanced)</option>
+                                    <option value="8.0">8.0 (Frequent prompts)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
                                 <h4>Session Insights</h4>
                                 <p>Get insights about your browsing sessions every 30 minutes</p>
                             </div>

@@ -167,6 +167,9 @@ class MindsetTracker {
         enableCredibilityBudget: true,  // Limit daily low-credibility source visits
         credibilityBudgetLimit: 3,      // Max low-credibility visits per day
         lowCredibilityThreshold: 6.0,   // Sources below this score count against budget
+        // Same-Story Upgrade settings
+        enableSameStoryUpgrade: true,   // Suggest same story from better sources
+        sameStoryThreshold: 7.0,        // Show upgrade for sources below this credibility
         // Content warning settings
         interventionLevel: 'balanced', // 'minimal', 'balanced', 'strict'
         showCredibilityWarnings: true,
@@ -209,7 +212,13 @@ class MindsetTracker {
           lastMetWeek: null           // Week key "2024-01-14"
         }
       },
-      dailyProgress: {}               // Keyed by ISO date
+      dailyProgress: {},              // Keyed by ISO date
+      sameStoryTelemetry: {
+        shownTotal: 0,
+        clickTotal: 0,
+        bySource: {},
+        lastEventAt: null
+      }
     };
   }
 
@@ -710,6 +719,346 @@ class MindsetTracker {
     return alternatives
       .sort((a, b) => b.credibility - a.credibility)
       .slice(0, 3);
+  }
+
+  /**
+   * Same-Story Upgrade - extract keywords from title for search
+   */
+  extractKeywords(title) {
+    if (!title) return [];
+
+    // Strip common publisher suffixes from headlines:
+    // "Headline - Outlet", "Headline | Outlet", etc.
+    let cleanedTitle = title
+      .replace(/\s+[|\-—:]\s+[^|\-—:]{2,60}$/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // Common stop words to filter out
+    const stopWords = new Set([
+      'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
+      'of', 'with', 'by', 'from', 'as', 'is', 'was', 'are', 'were', 'been',
+      'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+      'should', 'may', 'might', 'must', 'shall', 'can', 'need', 'dare', 'ought',
+      'used', 'it', 'its', 'this', 'that', 'these', 'those', 'i', 'you', 'he',
+      'she', 'we', 'they', 'what', 'which', 'who', 'whom', 'whose', 'where',
+      'when', 'why', 'how', 'all', 'each', 'every', 'both', 'few', 'more',
+      'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own',
+      'same', 'so', 'than', 'too', 'very', 'just', 'also', 'now', 'here',
+      'there', 'then', 'once', 'new', 'says', 'said', 'after', 'before',
+      'about', 'into', 'over', 'under', 'again', 'further', 'through',
+      'during', 'above', 'below', 'between', 'up', 'down', 'out', 'off',
+      'why', 'how', 'any', 'if', 'because', 'while', 'although', 'though',
+      'even', 'still', 'just', 'report', 'reports', 'breaking', 'update',
+      'live', 'latest', 'opinion', 'analysis', 'exclusive',
+      'video', 'photos', 'photo', 'watch', 'today', 'tomorrow', 'yesterday'
+    ]);
+
+    // Clean and tokenize
+    const words = cleanedTitle
+      .toLowerCase()
+      .replace(/[^\w\s'-]/g, ' ')  // Keep apostrophes and hyphens
+      .split(/\s+/)
+      .filter(word => word.length > 2 && !stopWords.has(word))
+      .map(word => word.replace(/^'+|'+$/g, '').replace(/^-+|-+$/g, ''))
+      .filter(Boolean);
+
+    // Score terms to prioritize likely topic anchors.
+    // Slightly favors longer terms and entities with numbers/acronym-like text.
+    const scored = words.map(word => {
+      let score = Math.min(word.length, 12);
+      if (/\d/.test(word)) score += 2;
+      if (/^[a-z]{2,5}$/.test(word) && ['us', 'uk', 'eu', 'nato', 'un', 'fbi', 'cia'].includes(word)) score += 2;
+      return { word, score };
+    });
+
+    // Deduplicate by best score while preserving the first occurrence order as tie-breaker
+    const bestByWord = new Map();
+    scored.forEach((item, index) => {
+      if (!bestByWord.has(item.word) || item.score > bestByWord.get(item.word).score) {
+        bestByWord.set(item.word, { ...item, index });
+      }
+    });
+
+    const ranked = Array.from(bestByWord.values())
+      .sort((a, b) => b.score - a.score || a.index - b.index)
+      .map(item => item.word);
+
+    // Ensure we always have the first meaningful terms for recall
+    const seen = new Set();
+    const fallbackOrdered = [];
+    for (const word of words) {
+      if (!seen.has(word)) {
+        seen.add(word);
+        fallbackOrdered.push(word);
+      }
+    }
+
+    // Merge ranked + fallback and keep up to 6 tokens
+    const merged = [];
+    const mergedSeen = new Set();
+    [...ranked, ...fallbackOrdered].forEach(word => {
+      if (!mergedSeen.has(word)) {
+        mergedSeen.add(word);
+        merged.push(word);
+      }
+    });
+
+    return merged.slice(0, 6);
+  }
+
+  /**
+   * Generate search URLs for high-credibility sources
+   */
+  generateUpgradeSearchLinks(keywords, options = {}) {
+    if (!keywords || keywords.length === 0) return [];
+
+    const searchQuery = encodeURIComponent(keywords.join(' '));
+    const currentDomain = (options.currentDomain || '').toLowerCase();
+    const currentSourceName = (options.currentSourceName || '').toLowerCase();
+    const currentBias = (options.currentBias || 'unknown').toLowerCase();
+
+    // Search patterns for sources that support keyword search URLs
+    const searchPatterns = {
+      'reuters.com': { searchUrl: `https://www.reuters.com/search/news?query=${searchQuery}`, icon: '📰' },
+      'apnews.com': { searchUrl: `https://apnews.com/search?q=${searchQuery}`, icon: '📰' },
+      'bbc.com': { searchUrl: `https://www.bbc.co.uk/search?q=${searchQuery}`, icon: '📺' },
+      'bbc.co.uk': { searchUrl: `https://www.bbc.co.uk/search?q=${searchQuery}`, icon: '📺' },
+      'npr.org': { searchUrl: `https://www.npr.org/search?query=${searchQuery}`, icon: '🎙️' },
+      'nytimes.com': { searchUrl: `https://www.nytimes.com/search?query=${searchQuery}`, icon: '🗞️' },
+      'washingtonpost.com': { searchUrl: `https://www.washingtonpost.com/search/?query=${searchQuery}`, icon: '🗞️' },
+      'wsj.com': { searchUrl: `https://www.wsj.com/search?query=${searchQuery}`, icon: '📰' },
+      'theguardian.com': { searchUrl: `https://www.theguardian.com/search?q=${searchQuery}`, icon: '📰' },
+      'politico.com': { searchUrl: `https://www.politico.com/search?q=${searchQuery}`, icon: '📰' },
+      'thehill.com': { searchUrl: `https://thehill.com/?s=${searchQuery}`, icon: '📰' },
+      'axios.com': { searchUrl: `https://www.axios.com/search?q=${searchQuery}`, icon: '📰' },
+      'bloomberg.com': { searchUrl: `https://www.bloomberg.com/search?query=${searchQuery}`, icon: '💼' }
+    };
+
+    const normalizeFamily = (domain) => {
+      const d = (domain || '').toLowerCase().replace(/^www\./, '');
+      const twoPartTlds = ['co.uk', 'com.au', 'org.uk', 'co.jp'];
+      for (const tld of twoPartTlds) {
+        if (d.endsWith(`.${tld}`) || d === tld) {
+          const parts = d.split('.');
+          return parts.slice(-3).join('.');
+        }
+      }
+      const parts = d.split('.');
+      return parts.length >= 2 ? parts.slice(-2).join('.') : d;
+    };
+
+    const currentFamily = normalizeFamily(currentDomain);
+    const seenNames = new Set();
+    const seenFamilies = new Set();
+    const candidates = [];
+
+    for (const [domain, pattern] of Object.entries(searchPatterns)) {
+      const sourceInfo = this.getSourceInfo(domain);
+      if (!sourceInfo || sourceInfo.credibility < 7.0) continue;
+
+      const family = normalizeFamily(domain);
+      const sourceName = (sourceInfo.name || domain).toLowerCase();
+
+      // Deduplicate current outlet by name and by root-family domain
+      if (family === currentFamily) continue;
+      if (currentSourceName && sourceName === currentSourceName) continue;
+
+      if (seenNames.has(sourceName) || seenFamilies.has(family)) continue;
+      seenNames.add(sourceName);
+      seenFamilies.add(family);
+
+      const sourceBias = (sourceInfo.bias || 'center').toLowerCase();
+      let biasBonus = 0;
+      if (currentBias.includes('left')) {
+        if (sourceBias === 'center' || sourceBias === 'right-center') biasBonus = 2.0;
+        else if (sourceBias === 'right') biasBonus = 1.5;
+      } else if (currentBias.includes('right')) {
+        if (sourceBias === 'center' || sourceBias === 'left-center') biasBonus = 2.0;
+        else if (sourceBias === 'left') biasBonus = 1.5;
+      } else {
+        if (sourceBias === 'center') biasBonus = 1.6;
+        else if (sourceBias === 'left-center' || sourceBias === 'right-center') biasBonus = 1.0;
+      }
+
+      const score = (sourceInfo.credibility * 1.25) + biasBonus;
+
+      candidates.push({
+        name: sourceInfo.name || domain,
+        domain,
+        credibility: sourceInfo.credibility,
+        bias: sourceInfo.bias || 'center',
+        searchUrl: pattern.searchUrl,
+        icon: pattern.icon,
+        score
+      });
+    }
+
+    // Always include Google News as a broad fallback discovery option.
+    candidates.push({
+      name: 'Google News',
+      domain: 'news.google.com',
+      credibility: 7.5,
+      bias: 'center',
+      searchUrl: `https://news.google.com/search?q=${searchQuery}`,
+      icon: '🔍',
+      score: 5
+    });
+
+    return candidates
+      .sort((a, b) => b.score - a.score || b.credibility - a.credibility)
+      .slice(0, 5)
+      .map(({ score, ...source }) => source);
+  }
+
+  ensureSameStoryTelemetry() {
+    if (!this.userData.sameStoryTelemetry || typeof this.userData.sameStoryTelemetry !== 'object') {
+      this.userData.sameStoryTelemetry = {
+        shownTotal: 0,
+        clickTotal: 0,
+        bySource: {},
+        lastEventAt: null
+      };
+    }
+
+    const telemetry = this.userData.sameStoryTelemetry;
+    if (typeof telemetry.shownTotal !== 'number') telemetry.shownTotal = 0;
+    if (typeof telemetry.clickTotal !== 'number') telemetry.clickTotal = 0;
+    if (!telemetry.bySource || typeof telemetry.bySource !== 'object') telemetry.bySource = {};
+    if (!('lastEventAt' in telemetry)) telemetry.lastEventAt = null;
+  }
+
+  async trackSameStoryUpgradeEvent(eventType, payload = {}) {
+    this.ensureSameStoryTelemetry();
+    const telemetry = this.userData.sameStoryTelemetry;
+    const nowIso = new Date().toISOString();
+
+    const upsertSourceEntry = (source) => {
+      const sourceDomain = this.sanitizeDomain(source?.domain || '');
+      if (!sourceDomain) return null;
+
+      if (!telemetry.bySource[sourceDomain]) {
+        telemetry.bySource[sourceDomain] = {
+          name: source?.name || sourceDomain,
+          shown: 0,
+          clicks: 0
+        };
+      } else if (source?.name && !telemetry.bySource[sourceDomain].name) {
+        telemetry.bySource[sourceDomain].name = source.name;
+      }
+
+      return telemetry.bySource[sourceDomain];
+    };
+
+    if (eventType === 'shown') {
+      telemetry.shownTotal++;
+      const sources = Array.isArray(payload.sources) ? payload.sources : [];
+      const seenDomains = new Set();
+      sources.forEach(source => {
+        const sourceDomain = this.sanitizeDomain(source?.domain || '');
+        if (!sourceDomain || seenDomains.has(sourceDomain)) return;
+        seenDomains.add(sourceDomain);
+
+        const sourceEntry = upsertSourceEntry(source);
+        if (sourceEntry) {
+          sourceEntry.shown++;
+        }
+      });
+    } else if (eventType === 'click') {
+      telemetry.clickTotal++;
+      const sourceEntry = upsertSourceEntry(payload.source || {});
+      if (sourceEntry) {
+        sourceEntry.clicks++;
+      }
+    }
+
+    telemetry.lastEventAt = nowIso;
+    await this.saveTrackingState();
+
+    return {
+      success: true,
+      telemetry: {
+        shownTotal: telemetry.shownTotal,
+        clickTotal: telemetry.clickTotal
+      }
+    };
+  }
+
+  getSameStoryUpgradeTelemetry() {
+    this.ensureSameStoryTelemetry();
+    const telemetry = this.userData.sameStoryTelemetry;
+
+    const topSources = Object.entries(telemetry.bySource)
+      .map(([domain, data]) => {
+        const shown = data.shown || 0;
+        const clicks = data.clicks || 0;
+        return {
+          domain,
+          name: data.name || domain,
+          shown,
+          clicks,
+          ctr: shown > 0 ? clicks / shown : 0
+        };
+      })
+      .sort((a, b) => b.clicks - a.clicks || b.shown - a.shown)
+      .slice(0, 10);
+
+    return {
+      shownTotal: telemetry.shownTotal,
+      clickTotal: telemetry.clickTotal,
+      ctr: telemetry.shownTotal > 0 ? telemetry.clickTotal / telemetry.shownTotal : 0,
+      lastEventAt: telemetry.lastEventAt,
+      topSources
+    };
+  }
+
+  /**
+   * Check if page qualifies for same-story upgrade suggestion
+   */
+  getSameStoryUpgradeStatus(domain, title) {
+    const enabled = this.userData?.settings?.enableSameStoryUpgrade !== false;
+    const threshold = this.userData?.settings?.sameStoryThreshold || 7.0;
+
+    if (!enabled) {
+      return { eligible: false, reason: 'disabled' };
+    }
+
+    // Get source info
+    const sourceInfo = this.getSourceInfo(domain);
+    const credibility = sourceInfo?.credibility || null;
+    const category = sourceInfo?.category || this.categorizeContent(domain, '', title);
+
+    // Only show for news content
+    if (category !== 'news') {
+      return { eligible: false, reason: 'not-news' };
+    }
+
+    // Only show for sources below threshold
+    if (credibility === null || credibility >= threshold) {
+      return { eligible: false, reason: 'credibility-ok', credibility };
+    }
+
+    // Extract keywords from title
+    const keywords = this.extractKeywords(title);
+    if (keywords.length < 2) {
+      return { eligible: false, reason: 'insufficient-keywords' };
+    }
+
+    // Generate search links
+    const searchLinks = this.generateUpgradeSearchLinks(keywords, {
+      currentDomain: domain,
+      currentSourceName: sourceInfo?.name || domain,
+      currentBias: sourceInfo?.bias || 'unknown'
+    });
+
+    return {
+      eligible: true,
+      credibility,
+      threshold,
+      keywords,
+      searchLinks,
+      sourceName: sourceInfo?.name || domain
+    };
   }
 
   assessTone(title, content = '') {
@@ -1768,6 +2117,26 @@ class MindsetTracker {
         sendResponse({ success: true });
         break;
 
+      case 'getSameStoryUpgrade':
+        const upgradeStatus = this.getSameStoryUpgradeStatus(
+          request.domain,
+          request.title
+        );
+        sendResponse(upgradeStatus);
+        break;
+
+      case 'trackSameStoryUpgradeEvent':
+        const telemetryResult = await this.trackSameStoryUpgradeEvent(
+          request.eventType,
+          request.payload || {}
+        );
+        sendResponse(telemetryResult);
+        break;
+
+      case 'getSameStoryUpgradeTelemetry':
+        sendResponse({ telemetry: this.getSameStoryUpgradeTelemetry() });
+        break;
+
       case 'updateSettings':
         if (request.settings && typeof request.settings === 'object') {
           this.userData.settings = { ...this.userData.settings, ...this.sanitizeSettings(request.settings) };
@@ -2085,7 +2454,8 @@ class MindsetTracker {
       'trackEntertainment', 'trackEducational', 'trackProfessional',
       'smartNotifications', 'toneAlerts', 'credibilityWarnings', 'echoChamberAlerts', 'sessionInsights',
       'weeklyReportNotification', 'dailyGoalNotification', 'timeLimitNotification',
-      'showCredibilityWarnings', 'showBiasWarnings', 'enableInterstitials'
+      'showCredibilityWarnings', 'showBiasWarnings', 'enableInterstitials',
+      'enableEchoChamberBreaker', 'enableCredibilityBudget', 'enableSameStoryUpgrade'
     ];
 
     // Intervention level setting
@@ -2142,6 +2512,34 @@ class MindsetTracker {
       const time = parseInt(settings.sessionBreakTime);
       if (!isNaN(time) && time >= 5 && time <= 60) {
         sanitized.sessionBreakTime = time;
+      }
+    }
+
+    if (settings.echoChamberBreakerThreshold !== undefined) {
+      const threshold = parseInt(settings.echoChamberBreakerThreshold);
+      if (!isNaN(threshold) && threshold >= 3 && threshold <= 10) {
+        sanitized.echoChamberBreakerThreshold = threshold;
+      }
+    }
+
+    if (settings.credibilityBudgetLimit !== undefined) {
+      const limit = parseInt(settings.credibilityBudgetLimit);
+      if (!isNaN(limit) && limit >= 1 && limit <= 10) {
+        sanitized.credibilityBudgetLimit = limit;
+      }
+    }
+
+    if (settings.lowCredibilityThreshold !== undefined) {
+      const threshold = parseFloat(settings.lowCredibilityThreshold);
+      if (!isNaN(threshold) && threshold >= 4.0 && threshold <= 8.0) {
+        sanitized.lowCredibilityThreshold = threshold;
+      }
+    }
+
+    if (settings.sameStoryThreshold !== undefined) {
+      const threshold = parseFloat(settings.sameStoryThreshold);
+      if (!isNaN(threshold) && threshold >= 5.0 && threshold <= 9.0) {
+        sanitized.sameStoryThreshold = threshold;
       }
     }
     

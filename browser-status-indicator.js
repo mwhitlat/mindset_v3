@@ -19,6 +19,11 @@ class BrowserStatusIndicator {
     // Credibility budget state
     this.credibilityBudgetStatus = null;
     this.credibilityBudgetInterstitialShown = false;
+    // Same-story upgrade state
+    this.sameStoryUpgradeBanner = null;
+    this.sameStoryUpgradeDismissed = false;
+    this.sameStoryUpgradeData = null;
+    this.sameStoryUpgradeImpressionTracked = false;
     this.init();
   }
 
@@ -42,6 +47,7 @@ class BrowserStatusIndicator {
     setTimeout(() => {
       this.checkEchoChamberBreaker();
       this.checkCredibilityBudget();
+      this.checkSameStoryUpgrade();
     }, 2000);
 
     // Create and inject the status indicator
@@ -907,6 +913,176 @@ class BrowserStatusIndicator {
     // Note: We don't clear exceeded state here - user chose to skip
   }
 
+  /**
+   * Same-Story Upgrade - suggest reading the same story from high-credibility sources
+   */
+  async checkSameStoryUpgrade() {
+    try {
+      if (this.sameStoryUpgradeDismissed) return;
+
+      const response = await chrome.runtime.sendMessage({
+        action: 'getSameStoryUpgrade',
+        domain: window.location.hostname,
+        title: document.title
+      });
+
+      this.sameStoryUpgradeData = response;
+
+      if (response && response.eligible) {
+        this.showSameStoryUpgradeBanner(response);
+      } else {
+        this.hideSameStoryUpgradeBanner();
+      }
+    } catch (error) {
+      console.error('Error checking same-story upgrade status:', error);
+      this.hideSameStoryUpgradeBanner();
+    }
+  }
+
+  showSameStoryUpgradeBanner(upgradeStatus) {
+    if (!upgradeStatus?.eligible || this.sameStoryUpgradeDismissed) return;
+
+    // Remove existing banner first
+    this.hideSameStoryUpgradeBanner();
+
+    const safeSourceName = this.escapeHtml(upgradeStatus.sourceName || window.location.hostname);
+    const safeCredibility = typeof upgradeStatus.credibility === 'number'
+      ? upgradeStatus.credibility.toFixed(1)
+      : '?';
+    const safeThreshold = typeof upgradeStatus.threshold === 'number'
+      ? upgradeStatus.threshold.toFixed(1)
+      : '7.0';
+
+    const linksHtml = (upgradeStatus.searchLinks || []).slice(0, 3).map(link => {
+      const safeName = this.escapeHtml(link.name || 'Source');
+      const safeIcon = this.escapeHtml(link.icon || '📰');
+      const safeCred = typeof link.credibility === 'number' ? link.credibility.toFixed(1) : '?';
+      const safeUrl = this.escapeHtml(link.searchUrl || '#');
+
+      return `
+        <a href="${safeUrl}"
+           target="_blank"
+           rel="noopener noreferrer"
+           data-source-domain="${this.escapeHtml(link.domain || '')}"
+           data-source-name="${safeName}"
+           style="
+             display: inline-flex;
+             align-items: center;
+             gap: 6px;
+             background: rgba(255,255,255,0.16);
+             color: white;
+             text-decoration: none;
+             padding: 8px 12px;
+             border-radius: 16px;
+             font-size: 12px;
+             font-weight: 500;
+             border: 1px solid rgba(255,255,255,0.2);
+             transition: all 0.2s ease;
+           "
+           onmouseover="this.style.background='rgba(255,255,255,0.26)'"
+           onmouseout="this.style.background='rgba(255,255,255,0.16)'">
+          <span>${safeIcon}</span>
+          <span>${safeName}</span>
+          <span style="opacity: 0.75;">${safeCred}/10</span>
+        </a>
+      `;
+    }).join('');
+
+    this.sameStoryUpgradeBanner = document.createElement('div');
+    this.sameStoryUpgradeBanner.id = 'mindset-same-story-upgrade';
+    this.sameStoryUpgradeBanner.style.cssText = `
+      position: fixed;
+      right: 14px;
+      bottom: 58px;
+      max-width: 420px;
+      width: min(420px, calc(100vw - 28px));
+      background: linear-gradient(135deg, rgba(30, 136, 229, 0.96) 0%, rgba(0, 188, 212, 0.94) 100%);
+      color: white;
+      border-radius: 12px;
+      padding: 14px;
+      z-index: 2147483646;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.3);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      backdrop-filter: blur(6px);
+    `;
+
+    this.sameStoryUpgradeBanner.innerHTML = `
+      <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
+        <div>
+          <div style="font-size: 15px; font-weight: 700; margin-bottom: 4px;">🔁 Same Story, Better Source</div>
+          <div style="font-size: 12px; line-height: 1.4; opacity: 0.95;">
+            <strong>${safeSourceName}</strong> is rated ${safeCredibility}/10 (below your ${safeThreshold} threshold).
+          </div>
+        </div>
+        <button id="mindset-same-story-dismiss" style="
+          border: none;
+          background: rgba(255,255,255,0.15);
+          color: white;
+          border-radius: 50%;
+          width: 22px;
+          height: 22px;
+          cursor: pointer;
+          font-size: 12px;
+          line-height: 1;
+          flex-shrink: 0;
+        " title="Dismiss">✕</button>
+      </div>
+      <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;">
+        ${linksHtml || '<span style="font-size:12px; opacity:0.8;">No upgrade sources available.</span>'}
+      </div>
+    `;
+
+    document.body.appendChild(this.sameStoryUpgradeBanner);
+
+    if (!this.sameStoryUpgradeImpressionTracked) {
+      const shownSources = (upgradeStatus.searchLinks || []).map(link => ({
+        domain: link.domain,
+        name: link.name
+      }));
+      chrome.runtime.sendMessage({
+        action: 'trackSameStoryUpgradeEvent',
+        eventType: 'shown',
+        payload: { sources: shownSources }
+      }).catch(error => {
+        console.error('Error tracking same-story shown event:', error);
+      });
+      this.sameStoryUpgradeImpressionTracked = true;
+    }
+
+    const dismissBtn = document.getElementById('mindset-same-story-dismiss');
+    if (dismissBtn) {
+      dismissBtn.addEventListener('click', () => {
+        this.sameStoryUpgradeDismissed = true;
+        this.hideSameStoryUpgradeBanner();
+      });
+    }
+
+    this.sameStoryUpgradeBanner.querySelectorAll('a[data-source-domain]').forEach(anchor => {
+      anchor.addEventListener('click', () => {
+        chrome.runtime.sendMessage({
+          action: 'trackSameStoryUpgradeEvent',
+          eventType: 'click',
+          payload: {
+            source: {
+              domain: anchor.dataset.sourceDomain,
+              name: anchor.dataset.sourceName
+            }
+          }
+        }).catch(error => {
+          console.error('Error tracking same-story click event:', error);
+        });
+      });
+    });
+  }
+
+  hideSameStoryUpgradeBanner() {
+    const banner = document.getElementById('mindset-same-story-upgrade');
+    if (banner) {
+      banner.remove();
+    }
+    this.sameStoryUpgradeBanner = null;
+  }
+
   showAlternativesPanel(alternatives, currentSource) {
     // Remove existing panel if any
     const existingPanel = document.getElementById('mindset-alternatives-panel');
@@ -1073,6 +1249,9 @@ class BrowserStatusIndicator {
     try {
       // Reset interstitial flag for new page
       this.interstitialShown = false;
+      this.sameStoryUpgradeDismissed = false;
+      this.sameStoryUpgradeImpressionTracked = false;
+      this.hideSameStoryUpgradeBanner();
 
       // Reset minimized state for new page (so users see bar on new pages)
       if (this.isStatusBarMinimized) {
@@ -1108,6 +1287,7 @@ class BrowserStatusIndicator {
 
         // Show warnings based on page data
         await this.showWarnings(response.pageData);
+        await this.checkSameStoryUpgrade();
       }
     } catch (error) {
       console.error('Error getting page data for status indicator:', error);
