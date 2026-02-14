@@ -498,6 +498,34 @@
 
                         <div class="setting-item">
                             <div class="setting-info">
+                                <h4>Echo Chamber Breaker</h4>
+                                <p>Require reading a different perspective after consecutive same-bias sources</p>
+                            </div>
+                            <div class="setting-control">
+                                <label class="toggle">
+                                    <input type="checkbox" id="enableEchoChamberBreaker" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Breaker Threshold</h4>
+                                <p>How many consecutive same-bias sources before requiring balance</p>
+                            </div>
+                            <div class="setting-control">
+                                <select id="echoChamberBreakerThreshold" class="select-control">
+                                    <option value="3">3 sources</option>
+                                    <option value="5" selected>5 sources</option>
+                                    <option value="7">7 sources</option>
+                                    <option value="10">10 sources</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
                                 <h4>Session Insights</h4>
                                 <p>Get insights about your browsing sessions every 30 minutes</p>
                             </div>

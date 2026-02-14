@@ -440,6 +440,199 @@ class BrowserStatusIndicator {
     }
   }
 
+  async checkEchoChamberBreaker() {
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'getEchoChamberBreakerStatus',
+        domain: window.location.hostname
+      });
+
+      if (response && response.enabled && response.inDebt) {
+        this.showEchoChamberBreakerInterstitial(response);
+      } else {
+        // Reset flag if not in debt (allows showing again if debt returns)
+        this.echoChamberBreakerShown = false;
+      }
+    } catch (error) {
+      console.error('Error checking echo chamber breaker status:', error);
+    }
+  }
+
+  showEchoChamberBreakerInterstitial(breakerStatus) {
+    // Don't show if already showing
+    if (this.echoChamberBreakerShown) {
+      return;
+    }
+    this.echoChamberBreakerShown = true;
+
+    // Remove existing breaker interstitial if any
+    const existing = document.getElementById('mindset-echo-breaker');
+    if (existing) {
+      existing.remove();
+    }
+
+    const biasLabel = breakerStatus.debtBias === 'left' ? 'left-leaning' : 'right-leaning';
+    const oppositeLabel = breakerStatus.debtBias === 'left' ? 'center or right-leaning' : 'center or left-leaning';
+
+    this.echoChamberBreaker = document.createElement('div');
+    this.echoChamberBreaker.id = 'mindset-echo-breaker';
+    this.echoChamberBreaker.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.97) 0%, rgba(118, 75, 162, 0.97) 100%);
+      z-index: 2147483647;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: white;
+      text-align: center;
+      padding: 40px;
+    `;
+
+    // Build alternatives HTML
+    let alternativesHtml = '';
+    if (breakerStatus.alternatives && breakerStatus.alternatives.length > 0) {
+      alternativesHtml = breakerStatus.alternatives.map(alt => {
+        const safeName = this.escapeHtml(alt.name);
+        const safeBias = this.escapeHtml(alt.bias || 'center');
+        return `
+          <a href="${this.escapeHtml(alt.url)}"
+             class="mindset-breaker-alt"
+             style="
+               display: flex;
+               align-items: center;
+               justify-content: space-between;
+               padding: 16px 20px;
+               background: rgba(255,255,255,0.15);
+               border-radius: 12px;
+               color: white;
+               text-decoration: none;
+               transition: all 0.2s ease;
+               margin-bottom: 12px;
+             "
+             onmouseover="this.style.background='rgba(255,255,255,0.25)'; this.style.transform='translateX(5px)';"
+             onmouseout="this.style.background='rgba(255,255,255,0.15)'; this.style.transform='translateX(0)';">
+            <span style="font-weight: 600; font-size: 16px;">${safeName}</span>
+            <span style="
+              background: rgba(255,255,255,0.2);
+              padding: 4px 10px;
+              border-radius: 20px;
+              font-size: 12px;
+            ">${safeBias}</span>
+          </a>
+        `;
+      }).join('');
+    }
+
+    this.echoChamberBreaker.innerHTML = `
+      <div style="max-width: 500px;">
+        <div style="font-size: 64px; margin-bottom: 20px;">⚖️</div>
+        <h1 style="font-size: 28px; font-weight: 700; margin-bottom: 16px;">
+          Echo Chamber Detected
+        </h1>
+        <p style="font-size: 18px; opacity: 0.9; margin-bottom: 8px;">
+          You've read <strong>${breakerStatus.consecutiveCount}+ consecutive ${biasLabel}</strong> sources.
+        </p>
+        <p style="font-size: 16px; opacity: 0.8; margin-bottom: 32px;">
+          To continue browsing freely, read a ${oppositeLabel} perspective first.
+        </p>
+
+        <div style="margin-bottom: 32px;">
+          <p style="font-size: 14px; opacity: 0.7; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px;">
+            Suggested Sources
+          </p>
+          ${alternativesHtml || '<p style="opacity: 0.7;">No alternatives available</p>'}
+        </div>
+
+        <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
+          <button id="mindset-breaker-skip" style="
+            padding: 12px 24px;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 8px;
+            background: transparent;
+            color: rgba(255,255,255,0.7);
+            font-size: 14px;
+            cursor: not-allowed;
+            transition: all 0.2s ease;
+          " disabled>
+            Skip (10s)
+          </button>
+          <button id="mindset-breaker-dismiss" style="
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: none;
+          ">
+            I'll diversify later
+          </button>
+        </div>
+
+        <p style="font-size: 12px; opacity: 0.5; margin-top: 32px;">
+          This helps you get balanced perspectives. You can disable this in Settings.
+        </p>
+      </div>
+    `;
+
+    document.body.appendChild(this.echoChamberBreaker);
+
+    // Start skip countdown
+    this.startBreakerSkipCountdown();
+
+    // Add event listeners
+    const dismissBtn = document.getElementById('mindset-breaker-dismiss');
+    if (dismissBtn) {
+      dismissBtn.addEventListener('click', () => {
+        this.hideEchoChamberBreaker();
+      });
+    }
+  }
+
+  startBreakerSkipCountdown() {
+    let countdown = 10;
+    const skipBtn = document.getElementById('mindset-breaker-skip');
+    const dismissBtn = document.getElementById('mindset-breaker-dismiss');
+
+    if (this.breakerCountdownInterval) {
+      clearInterval(this.breakerCountdownInterval);
+    }
+
+    this.breakerCountdownInterval = setInterval(() => {
+      countdown--;
+      if (skipBtn) {
+        if (countdown > 0) {
+          skipBtn.textContent = `Skip (${countdown}s)`;
+        } else {
+          skipBtn.style.display = 'none';
+          if (dismissBtn) {
+            dismissBtn.style.display = 'block';
+          }
+          clearInterval(this.breakerCountdownInterval);
+        }
+      }
+    }, 1000);
+  }
+
+  hideEchoChamberBreaker() {
+    if (this.echoChamberBreaker) {
+      this.echoChamberBreaker.remove();
+      this.echoChamberBreaker = null;
+    }
+    if (this.breakerCountdownInterval) {
+      clearInterval(this.breakerCountdownInterval);
+    }
+    // Note: We don't clear debt here - user chose to skip, debt remains
+  }
+
   showAlternativesPanel(alternatives, currentSource) {
     // Remove existing panel if any
     const existingPanel = document.getElementById('mindset-alternatives-panel');
@@ -614,6 +807,9 @@ class BrowserStatusIndicator {
           this.minimizedIndicator.style.display = 'none';
         }
       }
+
+      // Check for Echo Chamber Breaker debt first
+      await this.checkEchoChamberBreaker();
 
       // Extract basic page info
       const pageInfo = {

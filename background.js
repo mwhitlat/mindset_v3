@@ -23,6 +23,11 @@ class MindsetTracker {
     this.lastEchoChamberAlert = 0;
     this.echoChamberAlertCooldown = 1800000; // 30 minutes between alerts
 
+    // Echo Chamber Breaker - requires diverse perspective after consecutive same-bias
+    this.echoChamberDebt = false;        // Is user in "debt" mode?
+    this.echoChamberDebtBias = null;     // Which bias caused the debt ('left' or 'right')
+    this.echoChamberDebtTimestamp = null; // When debt was incurred
+
     // Engagement hooks
     this.notificationCooldowns = new Map();
     this.lastBadgeUpdate = 0;
@@ -125,6 +130,9 @@ class MindsetTracker {
         educationalGoal: 20, // 20% educational content
         sourceDiversityGoal: 10, // 10+ unique domains
         echoChamberAlerts: true, // Enable echo chamber detection alerts
+        // Echo Chamber Breaker settings
+        enableEchoChamberBreaker: true, // Require diverse perspective after consecutive same-bias
+        echoChamberBreakerThreshold: 5, // How many consecutive same-bias before triggering
         // Content warning settings
         interventionLevel: 'balanced', // 'minimal', 'balanced', 'strict'
         showCredibilityWarnings: true,
@@ -700,9 +708,23 @@ class MindsetTracker {
     // Calculate scores weekly
     this.calculateScores(weekKey);
 
-    // Echo chamber detection
+    // Echo chamber detection and breaker
     if (visitData.politicalBias && visitData.politicalBias !== 'unknown') {
+      // Check if this visit clears echo chamber debt
+      if (this.echoChamberDebt && this.checkBiasClearsDebt(visitData.politicalBias)) {
+        this.clearEchoChamberDebt();
+      }
+
       const echoChamberStatus = this.trackBiasHistory(visitData.politicalBias);
+      const breakerEnabled = this.userData?.settings?.enableEchoChamberBreaker !== false;
+      const breakerThreshold = this.userData?.settings?.echoChamberBreakerThreshold || 5;
+
+      // Set debt if breaker is enabled and threshold exceeded
+      if (breakerEnabled && echoChamberStatus.consecutiveCount >= breakerThreshold && !this.echoChamberDebt) {
+        this.setEchoChamberDebt(echoChamberStatus.dominantBias);
+      }
+
+      // Show notification alert (legacy behavior)
       if (echoChamberStatus.isEchoChamber || echoChamberStatus.consecutiveCount >= 5) {
         this.showEchoChamberAlert(echoChamberStatus);
       }
@@ -1352,6 +1374,78 @@ class MindsetTracker {
     return this.analyzePoliticalConsumption(weekData.visits);
   }
 
+  /**
+   * Echo Chamber Breaker - set debt when user hits consecutive threshold
+   */
+  setEchoChamberDebt(dominantBias) {
+    this.echoChamberDebt = true;
+    this.echoChamberDebtBias = dominantBias;
+    this.echoChamberDebtTimestamp = Date.now();
+    console.log(`Echo Chamber Breaker: Debt set for ${dominantBias}-leaning content`);
+  }
+
+  /**
+   * Clear echo chamber debt when user reads opposite perspective
+   */
+  clearEchoChamberDebt() {
+    if (this.echoChamberDebt) {
+      console.log('Echo Chamber Breaker: Debt cleared by reading diverse perspective');
+    }
+    this.echoChamberDebt = false;
+    this.echoChamberDebtBias = null;
+    this.echoChamberDebtTimestamp = null;
+  }
+
+  /**
+   * Check if a bias would clear the current debt
+   */
+  checkBiasClearsDebt(visitBias) {
+    if (!this.echoChamberDebt || !this.echoChamberDebtBias) {
+      return false;
+    }
+
+    // Map detailed bias to simplified
+    const biasMapping = {
+      'far-left': 'left', 'left': 'left', 'left-center': 'center',
+      'center': 'center',
+      'right-center': 'center', 'right': 'right', 'far-right': 'right'
+    };
+    const simplifiedVisitBias = biasMapping[visitBias] || 'unknown';
+
+    // Opposite bias clears debt
+    if (this.echoChamberDebtBias === 'left' && simplifiedVisitBias === 'right') {
+      return true;
+    }
+    if (this.echoChamberDebtBias === 'right' && simplifiedVisitBias === 'left') {
+      return true;
+    }
+    // Center also clears debt
+    if (simplifiedVisitBias === 'center') {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Get echo chamber breaker status for content scripts
+   */
+  getEchoChamberBreakerStatus() {
+    const echoChamberStatus = this.checkRealtimeEchoChamber();
+    const threshold = this.userData?.settings?.echoChamberBreakerThreshold || 5;
+    const enabled = this.userData?.settings?.enableEchoChamberBreaker !== false;
+
+    return {
+      enabled,
+      inDebt: this.echoChamberDebt,
+      debtBias: this.echoChamberDebtBias,
+      debtTimestamp: this.echoChamberDebtTimestamp,
+      consecutiveCount: echoChamberStatus.consecutiveCount,
+      threshold,
+      dominantBias: echoChamberStatus.dominantBias
+    };
+  }
+
   handleTabActivation(activeInfo) {
     // Update current site tracking
     chrome.tabs.get(activeInfo.tabId, (tab) => {
@@ -1427,6 +1521,29 @@ class MindsetTracker {
         } else {
           sendResponse({ weekly: null, realtime: null });
         }
+        break;
+
+      case 'getEchoChamberBreakerStatus':
+        // If a domain is provided, check if visiting it would clear debt
+        if (request.domain && this.echoChamberDebt) {
+          const pageBias = this.assessPoliticalBias(request.domain);
+          if (pageBias && this.checkBiasClearsDebt(pageBias)) {
+            this.clearEchoChamberDebt();
+          }
+        }
+        const breakerStatus = this.getEchoChamberBreakerStatus();
+        const breakerAlternatives = breakerStatus.inDebt
+          ? this.getAlternativeSources(breakerStatus.debtBias === 'left' ? 'left' : 'right', 'news')
+          : [];
+        sendResponse({
+          ...breakerStatus,
+          alternatives: breakerAlternatives
+        });
+        break;
+
+      case 'clearEchoChamberDebt':
+        this.clearEchoChamberDebt();
+        sendResponse({ success: true });
         break;
 
       case 'updateSettings':

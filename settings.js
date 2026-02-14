@@ -175,6 +175,14 @@ class SettingsManager {
       this.updateSetting('echoChamberAlerts', e.target.checked);
     });
 
+    document.getElementById('enableEchoChamberBreaker').addEventListener('change', (e) => {
+      this.updateSetting('enableEchoChamberBreaker', e.target.checked);
+    });
+
+    document.getElementById('echoChamberBreakerThreshold').addEventListener('change', (e) => {
+      this.updateSetting('echoChamberBreakerThreshold', parseInt(e.target.value));
+    });
+
     document.getElementById('sessionInsights').addEventListener('change', (e) => {
       this.updateSetting('sessionInsights', e.target.checked);
     });
@@ -350,6 +358,12 @@ class SettingsManager {
     }
     if (settings.echoChamberAlerts !== undefined) {
       document.getElementById('echoChamberAlerts').checked = settings.echoChamberAlerts;
+    }
+    if (settings.enableEchoChamberBreaker !== undefined) {
+      document.getElementById('enableEchoChamberBreaker').checked = settings.enableEchoChamberBreaker;
+    }
+    if (settings.echoChamberBreakerThreshold !== undefined) {
+      document.getElementById('echoChamberBreakerThreshold').value = settings.echoChamberBreakerThreshold;
     }
     if (settings.sessionInsights !== undefined) {
       document.getElementById('sessionInsights').checked = settings.sessionInsights;
