@@ -55,7 +55,7 @@
     echoStatus: {
       enabled: true,
       inDebt: false,
-      threshold: 5,
+      threshold: 8,
       consecutiveCount: 1,
       dominantBias: 'left',
       recentBiasHistory: [{ bias: 'left' }],

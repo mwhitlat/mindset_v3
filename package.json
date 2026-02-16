@@ -8,6 +8,9 @@
     "test:harness": "node scripts/serve-harness.mjs",
     "dev:test": "node scripts/serve-harness.mjs",
     "test:smoke": "node scripts/smoke-playwright.mjs",
-    "test:all": "npm run test:logic"
+    "test:all": "npm run test:logic && npm run test:smoke"
+  },
+  "devDependencies": {
+    "playwright": "^1.58.2"
   }
 }

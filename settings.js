@@ -657,7 +657,7 @@ class SettingsManager {
   openPrivacyPolicy() {
     // Open privacy policy in new tab
     chrome.tabs.create({
-      url: 'https://example.com/privacy-policy' // Replace with actual URL
+      url: 'https://matthewwhitlatch.github.io/mindset-privacy/'
     });
   }
 

@@ -24,6 +24,14 @@ class BrowserStatusIndicator {
     this.sameStoryUpgradeDismissed = false;
     this.sameStoryUpgradeData = null;
     this.sameStoryUpgradeImpressionTracked = false;
+    this.activeIntervention = null;
+    this.interventionPriority = {
+      echoBreaker: 100,
+      credibilityInterstitial: 90,
+      warningInterstitial: 80,
+      topBanner: 60,
+      sameStory: 40
+    };
     this.init();
   }
 
@@ -162,8 +170,6 @@ class BrowserStatusIndicator {
 
     // Reset states for new page
     this.bannerDismissed = false;
-    this.hideWarningBanner();
-    this.hideInterstitial();
 
     if (warningLevel === 0) return;
 
@@ -220,6 +226,7 @@ class BrowserStatusIndicator {
 
   showWarningBanner(pageData, alternatives) {
     if (this.bannerDismissed) return;
+    if (!this.claimIntervention('topBanner')) return;
 
     const { credibility, politicalBias, sourceName, category } = pageData;
 
@@ -312,9 +319,14 @@ class BrowserStatusIndicator {
     if (this.statusElement) {
       this.statusElement.style.marginTop = '0';
     }
+    if (this.activeIntervention === 'topBanner') {
+      this.activeIntervention = null;
+    }
   }
 
   showInterstitial(pageData, alternatives) {
+    if (!this.claimIntervention('warningInterstitial')) return;
+
     const { credibility, sourceName, category } = pageData;
 
     // Escape dynamic content to prevent XSS
@@ -456,6 +468,9 @@ class BrowserStatusIndicator {
     if (this.continueCountdownInterval) {
       clearInterval(this.continueCountdownInterval);
     }
+    if (this.activeIntervention === 'warningInterstitial') {
+      this.activeIntervention = null;
+    }
   }
 
   async checkEchoChamberBreaker() {
@@ -474,6 +489,7 @@ class BrowserStatusIndicator {
       } else {
         // Reset flag if not in debt (allows showing again if debt returns)
         this.echoChamberBreakerShown = false;
+        this.hideEchoChamberBreaker();
       }
     } catch (error) {
       console.error('Error checking echo chamber breaker status:', error);
@@ -529,6 +545,8 @@ class BrowserStatusIndicator {
   }
 
   showEchoChamberBreakerInterstitial(breakerStatus) {
+    if (!this.claimIntervention('echoBreaker')) return;
+
     // Don't show if already showing
     if (this.echoChamberBreakerShown) {
       return;
@@ -702,6 +720,9 @@ class BrowserStatusIndicator {
     if (this.breakerCountdownInterval) {
       clearInterval(this.breakerCountdownInterval);
     }
+    if (this.activeIntervention === 'echoBreaker') {
+      this.activeIntervention = null;
+    }
     // Note: We don't clear debt here - user chose to skip, debt remains
   }
 
@@ -721,6 +742,7 @@ class BrowserStatusIndicator {
 
       if (!response || !response.enabled) {
         this.credibilityBudgetInterstitialShown = false;
+        this.hideCredibilityBudgetInterstitial();
         return;
       }
 
@@ -731,6 +753,7 @@ class BrowserStatusIndicator {
       } else {
         // Reset flag if load recovered
         this.credibilityBudgetInterstitialShown = false;
+        this.hideCredibilityBudgetInterstitial();
       }
     } catch (error) {
       console.error('Error checking credibility budget status:', error);
@@ -738,6 +761,8 @@ class BrowserStatusIndicator {
   }
 
   showCredibilityNudgeBanner(status) {
+    if (!this.claimIntervention('topBanner')) return;
+
     const safeLoad = typeof status.load === 'number' ? status.load : 0;
     const alternatives = status.alternatives || [];
 
@@ -819,6 +844,8 @@ class BrowserStatusIndicator {
   }
 
   showCredibilityBudgetInterstitial(budgetStatus) {
+    if (!this.claimIntervention('credibilityInterstitial')) return;
+
     // Don't show if already showing
     if (this.credibilityBudgetInterstitialShown) {
       return;
@@ -965,6 +992,9 @@ class BrowserStatusIndicator {
     if (this.budgetCountdownInterval) {
       clearInterval(this.budgetCountdownInterval);
     }
+    if (this.activeIntervention === 'credibilityInterstitial') {
+      this.activeIntervention = null;
+    }
     // User chose to continue; load will still decay naturally over time
   }
 
@@ -996,6 +1026,7 @@ class BrowserStatusIndicator {
 
   showSameStoryUpgradeBanner(upgradeStatus) {
     if (!upgradeStatus?.eligible || this.sameStoryUpgradeDismissed) return;
+    if (!this.claimIntervention('sameStory')) return;
 
     // Remove existing banner first
     this.hideSameStoryUpgradeBanner();
@@ -1136,6 +1167,9 @@ class BrowserStatusIndicator {
       banner.remove();
     }
     this.sameStoryUpgradeBanner = null;
+    if (this.activeIntervention === 'sameStory') {
+      this.activeIntervention = null;
+    }
   }
 
   showAlternativesPanel(alternatives, currentSource) {
@@ -1306,7 +1340,7 @@ class BrowserStatusIndicator {
       this.interstitialShown = false;
       this.sameStoryUpgradeDismissed = false;
       this.sameStoryUpgradeImpressionTracked = false;
-      this.hideSameStoryUpgradeBanner();
+      this.resetInterventionsForPage();
 
       // Reset minimized state for new page (so users see bar on new pages)
       if (this.isStatusBarMinimized) {
@@ -1652,6 +1686,63 @@ class BrowserStatusIndicator {
       credibility: 5.0,
       tone: 'neutral'
     };
+  }
+
+  claimIntervention(type) {
+    const nextPriority = this.interventionPriority[type] || 0;
+
+    if (!this.activeIntervention) {
+      this.activeIntervention = type;
+      return true;
+    }
+
+    if (this.activeIntervention === type) return true;
+
+    const currentPriority = this.interventionPriority[this.activeIntervention] || 0;
+    if (nextPriority <= currentPriority) {
+      return false;
+    }
+
+    this.hideActiveIntervention();
+    this.activeIntervention = type;
+    return true;
+  }
+
+  hideActiveIntervention() {
+    const active = this.activeIntervention;
+    if (!active) return;
+
+    if (active === 'echoBreaker') {
+      this.hideEchoChamberBreaker();
+      return;
+    }
+    if (active === 'credibilityInterstitial') {
+      this.hideCredibilityBudgetInterstitial();
+      return;
+    }
+    if (active === 'warningInterstitial') {
+      this.hideInterstitial();
+      return;
+    }
+    if (active === 'topBanner') {
+      this.hideWarningBanner();
+      return;
+    }
+    if (active === 'sameStory') {
+      this.hideSameStoryUpgradeBanner();
+    }
+  }
+
+  resetInterventionsForPage() {
+    this.activeIntervention = null;
+    this.hideWarningBanner();
+    this.hideInterstitial();
+    this.hideEchoChamberBreaker();
+    this.hideCredibilityBudgetInterstitial();
+    this.hideSameStoryUpgradeBanner();
+    this.hideAlternativesPanel();
+    this.echoChamberBreakerShown = false;
+    this.credibilityBudgetInterstitialShown = false;
   }
 
   setupPageChangeListener() {

@@ -244,7 +244,7 @@
       else if (action === 'getGoalsProgress') response = buildGoalsProgress();
       else if (action === 'getWeekData') response = { weekData: userData.weeklyData[getWeekKey()] };
       else if (action === 'getEchoChamberAnalysis') response = { weekly: buildEchoAnalysis(), realtime: { isEchoChamber: false, consecutiveCount: 1 } };
-      else if (action === 'getEchoChamberBreakerStatus') response = { enabled: true, inDebt: false, threshold: 5, consecutiveCount: 1, dominantBias: 'left', recentBiasHistory: [] };
+      else if (action === 'getEchoChamberBreakerStatus') response = { enabled: true, inDebt: false, threshold: 8, consecutiveCount: 1, dominantBias: 'left', recentBiasHistory: [] };
       else if (action === 'analyzePageForTab') {
         const pageData = {
           domain: new URL(window.location.href).hostname,
