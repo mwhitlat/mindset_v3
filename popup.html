@@ -8,7 +8,6 @@
 </head>
 <body>
     <div class="popup-container">
-        <!-- Header -->
         <div class="header">
             <div class="logo">
                 <span class="logo-icon">🧠</span>
@@ -22,110 +21,65 @@
             </div>
         </div>
 
-        <!-- Quick Stats -->
+        <div class="hero-card">
+            <div class="hero-top">
+                <div class="hero-label">Digital Health</div>
+                <div class="hero-score-wrap">
+                    <div class="hero-score" id="overallHealth">-</div>
+                    <div class="hero-score-max">/10</div>
+                </div>
+            </div>
+            <div class="hero-stars" id="overallHealthStars"></div>
+            <div class="hero-message" id="healthMessage">Start browsing to build your baseline.</div>
+        </div>
+
         <div class="quick-stats">
             <div class="stat-item">
-                <div class="stat-label">This Week</div>
-                <div class="stat-value" id="weeklyVisits">-</div>
+                <div class="stat-label">Pages</div>
+                <div class="stat-value" id="weeklyVisits">0</div>
             </div>
             <div class="stat-item">
-                <div class="stat-label">Sites</div>
-                <div class="stat-value" id="uniqueDomains">-</div>
+                <div class="stat-label">Sources</div>
+                <div class="stat-value" id="uniqueDomains">0</div>
             </div>
             <div class="stat-item">
                 <div class="stat-label">Hours</div>
-                <div class="stat-value" id="totalHours">-</div>
+                <div class="stat-value" id="totalHours">0</div>
             </div>
         </div>
 
-        <!-- Goals Progress -->
-        <div class="goals-section">
-            <div class="goals-header">
-                <span class="goals-icon">🎯</span>
-                <span>Today's Goals</span>
-                <span class="streak-badge" id="dailyStreak">🔥 0</span>
+        <div class="signal-grid">
+            <div class="signal-card">
+                <div class="signal-label">Source Diversity</div>
+                <div class="signal-value" id="sourceDiversity">-</div>
             </div>
-            <div class="goals-progress" id="goalsProgress">
-                <div class="goal-item" id="goal-centerSources">
-                    <span class="goal-label">Center sources</span>
-                    <span class="goal-value">0/1</span>
-                    <div class="goal-bar"><div class="goal-fill"></div></div>
-                </div>
-                <div class="goal-item" id="goal-educational">
-                    <span class="goal-label">Educational</span>
-                    <span class="goal-value">0%</span>
-                    <div class="goal-bar"><div class="goal-fill"></div></div>
-                </div>
-                <div class="goal-item" id="goal-diversity">
-                    <span class="goal-label">Source diversity</span>
-                    <span class="goal-value">0/3</span>
-                    <div class="goal-bar"><div class="goal-fill"></div></div>
-                </div>
+            <div class="signal-card">
+                <div class="signal-label">Content Tone</div>
+                <div class="signal-value" id="contentTone">-</div>
+            </div>
+            <div class="signal-card">
+                <div class="signal-label">Perspective</div>
+                <div class="signal-value" id="politicalBalance">-</div>
             </div>
         </div>
 
-        <!-- Main Scores -->
-        <div class="scores-section">
-            <div class="score-card primary">
-                <div class="score-label">Overall Health</div>
-                <div class="score-value" id="overallHealth">-</div>
-                <div class="score-stars" id="overallHealthStars"></div>
-            </div>
-            
-            <div class="score-row">
-                <div class="score-card">
-                    <div class="score-label">Content Balance</div>
-                    <div class="score-value" id="contentBalance">-</div>
-                </div>
-                <div class="score-card">
-                    <div class="score-label">Source Diversity</div>
-                    <div class="score-value" id="sourceDiversity">-</div>
-                </div>
-            </div>
-            
-            <div class="score-row">
-                <div class="score-card">
-                    <div class="score-label">Content Tone</div>
-                    <div class="score-value" id="contentTone">-</div>
-                </div>
-                <div class="score-card">
-                    <div class="score-label">Political Balance</div>
-                    <div class="score-value" id="politicalBalance">-</div>
-                </div>
+        <div class="insight-card" id="insightsList">
+            <div class="insight-item loading">
+                <div class="insight-text">Loading your best next step...</div>
             </div>
         </div>
 
-        <!-- Quick Insights -->
-        <div class="insights-section">
-            <div class="insights-header">
-                <span class="insights-icon">💡</span>
-                <span>Quick Insights</span>
-            </div>
-            <div class="insights-list" id="insightsList">
-                <div class="insight-item loading">
-                    <div class="insight-text">Loading insights...</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Action Buttons -->
         <div class="action-buttons">
             <button class="btn btn-primary" id="viewReportBtn">
-                <span class="btn-icon">📊</span>
                 View Full Report
             </button>
             <button class="btn btn-secondary" id="settingsBtn">
-                <span class="btn-icon">⚙️</span>
                 Settings
             </button>
         </div>
 
-        <!-- Footer -->
         <div class="footer">
-            <div class="privacy-note">
-                <span class="privacy-icon">🔒</span>
-                All data stays on your device
-            </div>
+            All analysis stays on your device.
         </div>
     </div>
 

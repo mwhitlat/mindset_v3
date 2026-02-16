@@ -706,7 +706,7 @@ class BrowserStatusIndicator {
   }
 
   /**
-   * Credibility Budget - check if user has exceeded their daily low-credibility allowance
+   * Credibility Recovery Loop - progressive guidance (not all-day lock)
    */
   async checkCredibilityBudget() {
     try {
@@ -719,14 +719,65 @@ class BrowserStatusIndicator {
       this.credibilityBudgetStatus = response;
       this.updateCredibilityDebugRow();
 
-      if (response && response.enabled && response.exceeded) {
+      if (!response || !response.enabled) {
+        this.credibilityBudgetInterstitialShown = false;
+        return;
+      }
+
+      if (response.showInterstitial) {
         this.showCredibilityBudgetInterstitial(response);
+      } else if (response.showNudge && response.level === 'elevated') {
+        this.showCredibilityNudgeBanner(response);
       } else {
-        // Reset flag if not exceeded (allows showing again if exceeded later)
+        // Reset flag if load recovered
         this.credibilityBudgetInterstitialShown = false;
       }
     } catch (error) {
       console.error('Error checking credibility budget status:', error);
+    }
+  }
+
+  showCredibilityNudgeBanner(status) {
+    const safeLoad = typeof status.load === 'number' ? status.load : 0;
+    const alternatives = status.alternatives || [];
+
+    this.warningBanner.innerHTML = `
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span style="font-size:18px;">📉</span>
+        <span>Feed quality drifting (${safeLoad}/100). One high-credibility read can reset momentum.</span>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button id="mindset-open-credibility-alts" style="
+          background: rgba(255,255,255,0.2);
+          border: 1px solid rgba(255,255,255,0.35);
+          color: white;
+          padding: 6px 12px;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 12px;
+        ">Find Better Source</button>
+        <button id="mindset-dismiss-banner" style="
+          background: transparent;
+          border: 1px solid rgba(255,255,255,0.3);
+          color: white;
+          padding: 6px 12px;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 12px;
+        ">Dismiss</button>
+      </div>
+    `;
+    this.warningBanner.style.display = 'flex';
+
+    const altBtn = document.getElementById('mindset-open-credibility-alts');
+    if (altBtn) {
+      altBtn.addEventListener('click', () => {
+        this.showAlternativesPanel(alternatives, 'Your current feed');
+      });
+    }
+    const dismissBtn = document.getElementById('mindset-dismiss-banner');
+    if (dismissBtn) {
+      dismissBtn.addEventListener('click', () => this.hideWarningBanner());
     }
   }
 
@@ -735,34 +786,35 @@ class BrowserStatusIndicator {
 
     const status = this.credibilityBudgetStatus;
     if (!status) {
-      this.credibilityDebugRow.innerHTML = '<span>🔄 Budget: loading...</span>';
+      this.credibilityDebugRow.innerHTML = '<span>🔄 Credibility load: loading...</span>';
       return;
     }
 
     if (!status.enabled) {
-      this.credibilityDebugRow.innerHTML = '<span>🔇 Credibility budget: disabled</span>';
+      this.credibilityDebugRow.innerHTML = '<span>🔇 Credibility guidance: disabled</span>';
       return;
     }
 
-    const used = status.used || 0;
-    const limit = status.limit || 3;
-    const exceeded = status.exceeded || false;
+    const load = status.load || 0;
+    const level = status.level || 'normal';
+    const mode = status.mode || 'standard';
     const currentCred = status.currentPageCredibility;
     const credDisplay = currentCred !== null ? currentCred.toFixed(1) : '?';
 
-    let budgetStatusText;
-    if (status.budgetClearedByThisPage) {
-      budgetStatusText = '<span style="color:#4CAF50;">✓ RESTORED!</span>';
-    } else if (exceeded) {
-      budgetStatusText = '<span style="color:#FF5252;">⚠️ EXCEEDED</span>';
+    let loadStatusText;
+    if (level === 'high') {
+      loadStatusText = '<span style="color:#FF5252;">⚠️ HIGH</span>';
+    } else if (level === 'elevated') {
+      loadStatusText = '<span style="color:#FFB300;">△ ELEVATED</span>';
     } else {
-      budgetStatusText = '<span style="color:#4CAF50;">✓ OK</span>';
+      loadStatusText = '<span style="color:#4CAF50;">✓ NORMAL</span>';
     }
 
     this.credibilityDebugRow.innerHTML = `
-      <span>📊 Budget: ${used}/${limit}</span>
+      <span>📊 Load: ${load}/100</span>
+      <span>| Mode: ${mode}</span>
       <span>| This page: ${credDisplay}/10</span>
-      <span>| ${budgetStatusText}</span>
+      <span>| ${loadStatusText}</span>
     `;
   }
 
@@ -798,6 +850,9 @@ class BrowserStatusIndicator {
       text-align: center;
       padding: 40px;
     `;
+
+    // Mark intervention shown to enforce cooldown
+    chrome.runtime.sendMessage({ action: 'markCredibilityInterventionShown' }).catch(() => {});
 
     // Build alternatives HTML
     let alternativesHtml = '';
@@ -838,15 +893,15 @@ class BrowserStatusIndicator {
 
     this.credibilityBudgetInterstitial.innerHTML = `
       <div style="max-width: 500px;">
-        <div style="font-size: 64px; margin-bottom: 20px;">📊</div>
+        <div style="font-size: 64px; margin-bottom: 20px;">⚠️</div>
         <h1 style="font-size: 28px; font-weight: 700; margin-bottom: 16px;">
-          Daily Credibility Budget Exceeded
+          Credibility Drift Detected
         </h1>
         <p style="font-size: 18px; opacity: 0.9; margin-bottom: 8px;">
-          You've visited <strong>${budgetStatus.used} low-credibility sources</strong> today (limit: ${budgetStatus.limit}).
+          Your credibility load is <strong>${budgetStatus.load}/100</strong>.
         </p>
         <p style="font-size: 16px; opacity: 0.8; margin-bottom: 32px;">
-          Visit a high-credibility source (8.0+) to restore your budget, or wait until tomorrow.
+          Read one high-credibility source to recover quickly.
         </p>
 
         ${alternativesHtml ? `
@@ -867,7 +922,7 @@ class BrowserStatusIndicator {
             cursor: not-allowed;
             transition: all 0.3s ease;
           " disabled>
-            Continue anyway (10)
+            Continue anyway (6)
           </button>
         </div>
       </div>
@@ -883,7 +938,7 @@ class BrowserStatusIndicator {
     const skipBtn = document.getElementById('mindset-budget-skip');
     if (!skipBtn) return;
 
-    let countdown = 10;
+    let countdown = 6;
     this.budgetCountdownInterval = setInterval(() => {
       countdown--;
       if (countdown <= 0) {
@@ -910,7 +965,7 @@ class BrowserStatusIndicator {
     if (this.budgetCountdownInterval) {
       clearInterval(this.budgetCountdownInterval);
     }
-    // Note: We don't clear exceeded state here - user chose to skip
+    // User chose to continue; load will still decay naturally over time
   }
 
   /**

@@ -187,6 +187,10 @@ class SettingsManager {
       this.updateSetting('enableCredibilityBudget', e.target.checked);
     });
 
+    document.getElementById('credibilityGuidance').addEventListener('change', (e) => {
+      this.updateSetting('credibilityGuidance', e.target.value);
+    });
+
     document.getElementById('credibilityBudgetLimit').addEventListener('change', (e) => {
       this.updateSetting('credibilityBudgetLimit', parseInt(e.target.value));
     });
@@ -387,6 +391,9 @@ class SettingsManager {
     }
     if (settings.enableCredibilityBudget !== undefined) {
       document.getElementById('enableCredibilityBudget').checked = settings.enableCredibilityBudget;
+    }
+    if (settings.credibilityGuidance !== undefined) {
+      document.getElementById('credibilityGuidance').value = settings.credibilityGuidance;
     }
     if (settings.credibilityBudgetLimit !== undefined) {
       document.getElementById('credibilityBudgetLimit').value = settings.credibilityBudgetLimit;

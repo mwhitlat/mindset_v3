@@ -1,0 +1,13 @@
+{
+  "name": "mindset-extension-devtools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:logic": "node --test tests/logic/*.test.mjs",
+    "test:harness": "node scripts/serve-harness.mjs",
+    "dev:test": "node scripts/serve-harness.mjs",
+    "test:smoke": "node scripts/smoke-playwright.mjs",
+    "test:all": "npm run test:logic"
+  }
+}

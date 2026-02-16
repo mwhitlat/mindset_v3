@@ -57,6 +57,7 @@ class PopupManager {
     this.updateQuickStats(userData);
     this.updateScores(userData.scores);
     this.updateInsights(userData);
+    this.updateHealthMessage(userData.scores);
   }
 
   updateQuickStats(userData) {
@@ -129,6 +130,29 @@ class PopupManager {
       }
       
       element.textContent = stars;
+    }
+  }
+
+  updateHealthMessage(scores) {
+    const messageEl = document.getElementById('healthMessage');
+    if (!messageEl || !scores) return;
+
+    const overall = scores.overallHealth || 0;
+    const tone = scores.contentTone || 0;
+    const perspective = scores.politicalBalance || 0;
+
+    if (overall >= 8) {
+      messageEl.textContent = 'Strong week. Keep your source mix and momentum.';
+    } else if (overall >= 6) {
+      if (tone < 6) {
+        messageEl.textContent = 'Solid baseline. Add a few more solution-focused reads.';
+      } else if (perspective < 6) {
+        messageEl.textContent = 'Good pace. Add one different viewpoint today.';
+      } else {
+        messageEl.textContent = 'You are on track. One quality source can lift this score.';
+      }
+    } else {
+      messageEl.textContent = 'Let’s reset: read one high-credibility source from a new angle.';
     }
   }
 

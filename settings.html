@@ -516,10 +516,10 @@
                             </div>
                             <div class="setting-control">
                                 <select id="echoChamberBreakerThreshold" class="select-control">
-                                    <option value="3">3 sources</option>
-                                    <option value="5" selected>5 sources</option>
-                                    <option value="7">7 sources</option>
+                                    <option value="8" selected>8 sources</option>
                                     <option value="10">10 sources</option>
+                                    <option value="12">12 sources</option>
+                                    <option value="15">15 sources</option>
                                 </select>
                             </div>
                         </div>
@@ -527,7 +527,7 @@
                         <div class="setting-item">
                             <div class="setting-info">
                                 <h4>Credibility Budget</h4>
-                                <p>Limit daily visits to low-credibility sources</p>
+                                <p>Enable credibility recovery guidance</p>
                             </div>
                             <div class="setting-control">
                                 <label class="toggle">
@@ -539,8 +539,23 @@
 
                         <div class="setting-item">
                             <div class="setting-info">
+                                <h4>Guidance Mode</h4>
+                                <p>Controls how quickly credibility guidance appears</p>
+                            </div>
+                            <div class="setting-control">
+                                <select id="credibilityGuidance" class="select-control">
+                                    <option value="off">Off</option>
+                                    <option value="gentle">Gentle</option>
+                                    <option value="standard" selected>Standard</option>
+                                    <option value="strong">Strong</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
                                 <h4>Daily Budget Limit</h4>
-                                <p>Maximum low-credibility sources allowed per day</p>
+                                <p>Legacy sensitivity control (optional)</p>
                             </div>
                             <div class="setting-control">
                                 <select id="credibilityBudgetLimit" class="select-control">

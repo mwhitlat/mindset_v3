@@ -19,19 +19,24 @@ class MindsetTracker {
     // Echo chamber detection
     this.recentBiasHistory = []; // Track last N articles' bias
     this.maxBiasHistory = 10;    // How many recent articles to track
-    this.echoChamberThreshold = 0.7; // 70% same-bias triggers alert
+    this.echoChamberThreshold = 0.8; // 80% same-bias triggers alert
+    this.minEchoHistoryForAlert = 8; // Require more samples before triggering
+    this.minConsecutiveForAlert = 8; // Require longer same-bias streak
     this.lastEchoChamberAlert = 0;
     this.echoChamberAlertCooldown = 1800000; // 30 minutes between alerts
+    this.echoStateDateKey = null; // Reset echo state daily
 
     // Echo Chamber Breaker - requires diverse perspective after consecutive same-bias
     this.echoChamberDebt = false;        // Is user in "debt" mode?
     this.echoChamberDebtBias = null;     // Which bias caused the debt ('left' or 'right')
     this.echoChamberDebtTimestamp = null; // When debt was incurred
 
-    // Credibility Budget - limits daily low-credibility source visits
-    this.credibilityBudgetUsed = 0;      // How many low-credibility visits today
-    this.credibilityBudgetDate = null;   // Date of current budget period (ISO date string)
-    this.credibilityBudgetExceeded = false; // Is user over budget?
+    // Credibility Recovery Loop (replaces hard daily budget lock)
+    this.credibilityLoad = 0;                    // 0-100 drift score from low-cred sources
+    this.lastCredibilityEventTs = null;          // Last time load was updated
+    this.lastCredibilityInterventionTs = null;   // Last strong intervention shown
+    this.credibilityDecayPerHour = 10;           // Passive recovery over time
+    this.credibilityInterventionCooldown = 1800000; // 30 min cooldown
 
     // Engagement hooks
     this.notificationCooldowns = new Map();
@@ -51,7 +56,9 @@ class MindsetTracker {
     try {
       const result = await chrome.storage.local.get([
         'isTracking', 'userData', 'encryptedData', 'encryptionEnabled', 'encryptionSalt',
-        'recentBiasHistory', 'echoChamberDebt', 'echoChamberDebtBias', 'echoChamberDebtTimestamp',
+        'recentBiasHistory', 'echoChamberDebt', 'echoChamberDebtBias', 'echoChamberDebtTimestamp', 'echoStateDateKey',
+        'credibilityLoad', 'lastCredibilityEventTs', 'lastCredibilityInterventionTs',
+        // Legacy keys for migration
         'credibilityBudgetUsed', 'credibilityBudgetDate', 'credibilityBudgetExceeded'
       ]);
 
@@ -68,10 +75,12 @@ class MindsetTracker {
         this.echoChamberDebt = decryptedData.echoChamberDebt || false;
         this.echoChamberDebtBias = decryptedData.echoChamberDebtBias || null;
         this.echoChamberDebtTimestamp = decryptedData.echoChamberDebtTimestamp || null;
-        // Restore credibility budget state from encrypted data
-        this.credibilityBudgetUsed = decryptedData.credibilityBudgetUsed || 0;
-        this.credibilityBudgetDate = decryptedData.credibilityBudgetDate || null;
-        this.credibilityBudgetExceeded = decryptedData.credibilityBudgetExceeded || false;
+        this.echoStateDateKey = decryptedData.echoStateDateKey || null;
+        // Restore credibility recovery state (with migration from legacy budget fields)
+        const migratedLoad = (decryptedData.credibilityBudgetUsed || 0) * 20;
+        this.credibilityLoad = typeof decryptedData.credibilityLoad === 'number' ? decryptedData.credibilityLoad : migratedLoad;
+        this.lastCredibilityEventTs = decryptedData.lastCredibilityEventTs || null;
+        this.lastCredibilityInterventionTs = decryptedData.lastCredibilityInterventionTs || null;
       } else {
         // Handle unencrypted data
         this.isTracking = result.isTracking !== false;
@@ -81,14 +90,17 @@ class MindsetTracker {
         this.echoChamberDebt = result.echoChamberDebt || false;
         this.echoChamberDebtBias = result.echoChamberDebtBias || null;
         this.echoChamberDebtTimestamp = result.echoChamberDebtTimestamp || null;
-        // Restore credibility budget state
-        this.credibilityBudgetUsed = result.credibilityBudgetUsed || 0;
-        this.credibilityBudgetDate = result.credibilityBudgetDate || null;
-        this.credibilityBudgetExceeded = result.credibilityBudgetExceeded || false;
+        this.echoStateDateKey = result.echoStateDateKey || null;
+        // Restore credibility recovery state (with migration from legacy budget fields)
+        const migratedLoad = (result.credibilityBudgetUsed || 0) * 20;
+        this.credibilityLoad = typeof result.credibilityLoad === 'number' ? result.credibilityLoad : migratedLoad;
+        this.lastCredibilityEventTs = result.lastCredibilityEventTs || null;
+        this.lastCredibilityInterventionTs = result.lastCredibilityInterventionTs || null;
       }
 
-      // Reset credibility budget if it's a new day
-      this.checkAndResetDailyBudget();
+      // Apply passive decay once on startup so stale load doesn't stick forever
+      this.applyCredibilityDecay();
+      this.checkAndResetDailyEchoState();
       
       // Initialize empty weekly data if none exists
       if (!this.userData.weeklyData) {
@@ -162,11 +174,12 @@ class MindsetTracker {
         echoChamberAlerts: true, // Enable echo chamber detection alerts
         // Echo Chamber Breaker settings
         enableEchoChamberBreaker: true, // Require diverse perspective after consecutive same-bias
-        echoChamberBreakerThreshold: 5, // How many consecutive same-bias before triggering
+        echoChamberBreakerThreshold: 8, // How many consecutive same-bias before triggering
         // Credibility Budget settings
-        enableCredibilityBudget: true,  // Limit daily low-credibility source visits
-        credibilityBudgetLimit: 3,      // Max low-credibility visits per day
-        lowCredibilityThreshold: 6.0,   // Sources below this score count against budget
+        enableCredibilityBudget: true,  // Keep key for backwards compatibility (toggle guidance)
+        credibilityBudgetLimit: 3,      // Legacy key (still accepted)
+        lowCredibilityThreshold: 6.0,   // Sources below this score increase load
+        credibilityGuidance: 'standard', // off|gentle|standard|strong
         // Same-Story Upgrade settings
         enableSameStoryUpgrade: true,   // Suggest same story from better sources
         sameStoryThreshold: 7.0,        // Show upgrade for sources below this credibility
@@ -415,7 +428,7 @@ class MindsetTracker {
   }
 
   async trackPageVisit(tab) {
-    if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+    if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || this.isTestOrHarnessPage(tab.url, tab.title || '')) {
       return;
     }
 
@@ -457,6 +470,7 @@ class MindsetTracker {
       tone: this.assessTone(sanitizedTitle),
       sourceName: this.getSourceName(sanitizedDomain)
     };
+    if (this.isTestOrHarnessDomain(visitData.domain)) return;
 
     // Update current session
     if (this.currentSession.currentSite && this.currentSession.currentSite.domain === domain) {
@@ -489,6 +503,7 @@ class MindsetTracker {
       tone: this.assessTone(title, content),
       sourceName: this.getSourceName(domain)
     };
+    if (this.isTestOrHarnessDomain(visitData.domain)) return;
 
     // Update current session
     if (this.currentSession.currentSite && this.currentSession.currentSite.domain === domain) {
@@ -1093,6 +1108,8 @@ class MindsetTracker {
   }
 
   saveVisitData(visitData) {
+    this.checkAndResetDailyEchoState();
+
     const weekKey = this.getWeekKey();
 
     // Initialize week data if needed
@@ -1143,7 +1160,7 @@ class MindsetTracker {
 
       const echoChamberStatus = this.trackBiasHistory(visitData.politicalBias);
       const breakerEnabled = this.userData?.settings?.enableEchoChamberBreaker !== false;
-      const breakerThreshold = this.userData?.settings?.echoChamberBreakerThreshold || 5;
+      const breakerThreshold = this.getEchoBreakerThreshold();
 
       // Set debt if breaker is enabled and threshold exceeded
       // Don't immediately re-set debt if it was just cleared
@@ -1152,7 +1169,7 @@ class MindsetTracker {
       }
 
       // Show notification alert (legacy behavior) - skip if debt just cleared
-      if (!debtJustCleared && (echoChamberStatus.isEchoChamber || echoChamberStatus.consecutiveCount >= 5)) {
+      if (!debtJustCleared && (echoChamberStatus.isEchoChamber || echoChamberStatus.consecutiveCount >= breakerThreshold)) {
         this.showEchoChamberAlert(echoChamberStatus);
       }
 
@@ -1160,17 +1177,11 @@ class MindsetTracker {
       this.saveTrackingState();
     }
 
-    // Credibility budget tracking
+    // Credibility recovery loop tracking
     if (visitData.credibility !== null && visitData.credibility !== undefined) {
-      // Check if high-credibility visit clears exceeded state
-      if (this.credibilityBudgetExceeded && this.checkCredibilityClearsBudget(visitData.credibility)) {
-        this.clearCredibilityBudgetExceeded();
-      }
+      this.updateCredibilityLoadFromVisit(visitData.credibility);
 
-      // Track low-credibility visits against budget
-      this.trackLowCredibilityVisit(visitData.credibility);
-
-      // Persist credibility budget state
+      // Persist credibility recovery state
       this.saveTrackingState();
     }
 
@@ -1707,7 +1718,7 @@ class MindsetTracker {
    * Check if recent browsing forms an echo chamber
    */
   checkRealtimeEchoChamber() {
-    if (this.recentBiasHistory.length < 5) {
+    if (this.recentBiasHistory.length < this.minEchoHistoryForAlert) {
       return { isEchoChamber: false };
     }
 
@@ -1777,7 +1788,7 @@ class MindsetTracker {
     let message = '';
     let title = '';
 
-    if (echoChamberStatus.consecutiveCount >= 5) {
+    if (echoChamberStatus.consecutiveCount >= this.minConsecutiveForAlert) {
       // Alert for consecutive same-bias content
       const biasLabel = echoChamberStatus.dominantBias === 'left' ? 'left-leaning' : 'right-leaning';
       title = 'Echo Chamber Alert';
@@ -1876,7 +1887,7 @@ class MindsetTracker {
    */
   getEchoChamberBreakerStatus() {
     const echoChamberStatus = this.checkRealtimeEchoChamber();
-    const threshold = this.userData?.settings?.echoChamberBreakerThreshold || 5;
+    const threshold = this.getEchoBreakerThreshold();
     const enabled = this.userData?.settings?.enableEchoChamberBreaker !== false;
 
     return {
@@ -1890,89 +1901,137 @@ class MindsetTracker {
     };
   }
 
-  /**
-   * Credibility Budget - check and reset daily budget
-   */
-  checkAndResetDailyBudget() {
+  getEchoBreakerThreshold() {
+    const configured = this.userData?.settings?.echoChamberBreakerThreshold;
+    const parsed = Number(configured);
+    const base = Number.isFinite(parsed) ? parsed : this.minConsecutiveForAlert;
+    return Math.max(this.minConsecutiveForAlert, base);
+  }
+
+  isTestOrHarnessDomain(domain) {
+    const d = (domain || '').toLowerCase();
+    return d === 'localhost' || d === '127.0.0.1' || d === '[::1]';
+  }
+
+  isTestOrHarnessPage(rawUrl, title = '') {
+    try {
+      const parsed = new URL(rawUrl);
+      const host = (parsed.hostname || '').toLowerCase();
+      const pagePath = (parsed.pathname || '').toLowerCase();
+      const t = (title || '').toLowerCase();
+
+      if (host === 'localhost' || host === '127.0.0.1' || host === '[::1]') return true;
+      if (pagePath.includes('/tests/harness') || pagePath.endsWith('-test.html') || pagePath.includes('/test/')) return true;
+      if (t.includes('harness') || t.includes('test')) return true;
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
+  checkAndResetDailyEchoState() {
     const today = new Date().toISOString().split('T')[0];
-
-    if (this.credibilityBudgetDate !== today) {
-      // New day - reset budget
-      this.credibilityBudgetUsed = 0;
-      this.credibilityBudgetDate = today;
-      this.credibilityBudgetExceeded = false;
-      console.log('Credibility Budget: Reset for new day');
+    if (this.echoStateDateKey !== today) {
+      this.echoStateDateKey = today;
+      this.recentBiasHistory = [];
+      this.echoChamberDebt = false;
+      this.echoChamberDebtBias = null;
+      this.echoChamberDebtTimestamp = null;
+      this.lastEchoChamberAlert = 0;
     }
   }
 
-  /**
-   * Track a low-credibility visit against the budget
-   */
-  trackLowCredibilityVisit(credibility) {
+  applyCredibilityDecay(now = Date.now()) {
+    if (!this.lastCredibilityEventTs) {
+      this.lastCredibilityEventTs = now;
+      return this.credibilityLoad;
+    }
+
+    const elapsedMs = Math.max(0, now - this.lastCredibilityEventTs);
+    const elapsedHours = elapsedMs / (1000 * 60 * 60);
+    const decay = elapsedHours * this.credibilityDecayPerHour;
+    this.credibilityLoad = Math.max(0, this.credibilityLoad - decay);
+    this.lastCredibilityEventTs = now;
+    return this.credibilityLoad;
+  }
+
+  getCredibilityGuidanceConfig() {
+    const guidance = this.userData?.settings?.credibilityGuidance || 'standard';
+    const configByGuidance = {
+      off: { enabled: false, elevated: 1000, high: 1000, label: 'off' },
+      gentle: { enabled: true, elevated: 55, high: 82, label: 'gentle' },
+      standard: { enabled: true, elevated: 45, high: 72, label: 'standard' },
+      strong: { enabled: true, elevated: 35, high: 62, label: 'strong' }
+    };
+    return configByGuidance[guidance] || configByGuidance.standard;
+  }
+
+  updateCredibilityLoadFromVisit(credibility) {
     const threshold = this.userData?.settings?.lowCredibilityThreshold || 6.0;
-    const limit = this.userData?.settings?.credibilityBudgetLimit || 3;
-    const enabled = this.userData?.settings?.enableCredibilityBudget !== false;
+    const legacyEnabled = this.userData?.settings?.enableCredibilityBudget !== false;
+    const config = this.getCredibilityGuidanceConfig();
+    const enabled = legacyEnabled && config.enabled;
 
-    if (!enabled) return;
+    this.applyCredibilityDecay();
 
-    // Ensure we're on the current day
-    this.checkAndResetDailyBudget();
+    if (!enabled || credibility === null || credibility === undefined) {
+      return;
+    }
 
-    // Check if this is a low-credibility source
-    if (credibility !== null && credibility < threshold) {
-      this.credibilityBudgetUsed++;
-      console.log(`Credibility Budget: Used ${this.credibilityBudgetUsed}/${limit}`);
-
-      // Check if budget exceeded
-      if (this.credibilityBudgetUsed > limit && !this.credibilityBudgetExceeded) {
-        this.credibilityBudgetExceeded = true;
-        console.log('Credibility Budget: Exceeded!');
-      }
+    if (credibility < threshold) {
+      // Lower credibility => higher contribution to drift load.
+      const deficit = Math.max(0, threshold - credibility);
+      const severityPoints = 8 + (deficit * 8) + (credibility < 3 ? 8 : 0);
+      this.credibilityLoad = Math.min(100, this.credibilityLoad + severityPoints);
+    } else if (credibility >= 8.0) {
+      // High-cred visit is a fast recovery action.
+      this.credibilityLoad = Math.max(0, this.credibilityLoad - 22);
+    } else if (credibility >= 7.0) {
+      this.credibilityLoad = Math.max(0, this.credibilityLoad - 8);
     }
   }
 
-  /**
-   * Check if visiting a high-credibility source clears the exceeded state
-   */
-  checkCredibilityClearsBudget(credibility) {
-    const highCredThreshold = 8.0; // High-credibility sources can restore budget
+  getCredibilityBudgetStatus(currentPageCredibility = null) {
+    this.applyCredibilityDecay();
 
-    if (this.credibilityBudgetExceeded && credibility !== null && credibility >= highCredThreshold) {
-      return true;
-    }
-    return false;
-  }
-
-  /**
-   * Clear the exceeded state (user visited high-credibility source)
-   */
-  clearCredibilityBudgetExceeded() {
-    if (this.credibilityBudgetExceeded) {
-      console.log('Credibility Budget: Cleared by visiting high-credibility source');
-      this.credibilityBudgetExceeded = false;
-      // Optionally reduce the used count slightly as a reward
-      this.credibilityBudgetUsed = Math.max(0, this.credibilityBudgetUsed - 1);
-    }
-  }
-
-  /**
-   * Get credibility budget status for content scripts
-   */
-  getCredibilityBudgetStatus() {
-    this.checkAndResetDailyBudget();
-
-    const limit = this.userData?.settings?.credibilityBudgetLimit || 3;
     const threshold = this.userData?.settings?.lowCredibilityThreshold || 6.0;
-    const enabled = this.userData?.settings?.enableCredibilityBudget !== false;
+    const config = this.getCredibilityGuidanceConfig();
+    const legacyEnabled = this.userData?.settings?.enableCredibilityBudget !== false;
+    const enabled = legacyEnabled && config.enabled;
+    const load = Math.max(0, Math.min(100, Math.round(this.credibilityLoad)));
+
+    let level = 'normal';
+    if (enabled && load >= config.high) level = 'high';
+    else if (enabled && load >= config.elevated) level = 'elevated';
+
+    const now = Date.now();
+    const sinceIntervention = this.lastCredibilityInterventionTs
+      ? (now - this.lastCredibilityInterventionTs)
+      : Number.MAX_SAFE_INTEGER;
+    const cooldownRemainingMs = Math.max(0, this.credibilityInterventionCooldown - sinceIntervention);
+
+    const recoveryProgress = Math.max(0, Math.min(100,
+      config.elevated > 0 ? Math.round(((config.elevated - load) / config.elevated) * 100) : 100
+    ));
 
     return {
       enabled,
-      exceeded: this.credibilityBudgetExceeded,
-      used: this.credibilityBudgetUsed,
-      limit,
+      mode: config.label,
       threshold,
-      remaining: Math.max(0, limit - this.credibilityBudgetUsed)
+      load,
+      level,
+      elevatedAt: config.elevated,
+      highAt: config.high,
+      recoveryProgress,
+      currentPageCredibility,
+      showNudge: enabled && level !== 'normal',
+      showInterstitial: enabled && level === 'high' && cooldownRemainingMs === 0,
+      cooldownRemainingMs
     };
+  }
+
+  markCredibilityInterventionShown() {
+    this.lastCredibilityInterventionTs = Date.now();
   }
 
   handleTabActivation(activeInfo) {
@@ -2053,6 +2112,22 @@ class MindsetTracker {
         break;
 
       case 'getEchoChamberBreakerStatus':
+        if (request.domain && this.isTestOrHarnessDomain(request.domain)) {
+          sendResponse({
+            enabled: false,
+            inDebt: false,
+            debtBias: null,
+            debtTimestamp: null,
+            consecutiveCount: 0,
+            threshold: this.getEchoBreakerThreshold(),
+            dominantBias: null,
+            alternatives: [],
+            recentBiasHistory: [],
+            currentPageBias: 'unknown',
+            debtClearedByThisPage: false
+          });
+          break;
+        }
         // Get current page bias for debug display
         let currentPageBias = 'unknown';
         let debtClearedByThisPage = false;
@@ -2087,32 +2162,47 @@ class MindsetTracker {
         break;
 
       case 'getCredibilityBudgetStatus':
+        if (request.domain && this.isTestOrHarnessDomain(request.domain)) {
+          sendResponse({
+            enabled: false,
+            mode: 'off',
+            threshold: this.userData?.settings?.lowCredibilityThreshold || 6.0,
+            load: 0,
+            level: 'normal',
+            elevatedAt: 1000,
+            highAt: 1000,
+            recoveryProgress: 100,
+            currentPageCredibility: this.assessCredibility(request.domain),
+            showNudge: false,
+            showInterstitial: false,
+            cooldownRemainingMs: 0,
+            alternatives: []
+          });
+          break;
+        }
         // Get current page credibility for debug display
         let currentPageCredibility = null;
-        let budgetClearedByThisPage = false;
         if (request.domain) {
           currentPageCredibility = this.assessCredibility(request.domain);
-
-          // If exceeded, check if visiting this page would clear it
-          if (this.credibilityBudgetExceeded && currentPageCredibility !== null &&
-              this.checkCredibilityClearsBudget(currentPageCredibility)) {
-            this.clearCredibilityBudgetExceeded();
-            budgetClearedByThisPage = true;
-            this.saveTrackingState();
-          }
         }
-        const budgetStatus = this.getCredibilityBudgetStatus();
+        const budgetStatus = this.getCredibilityBudgetStatus(currentPageCredibility);
         const highCredSources = this.getHighCredibilitySources();
         sendResponse({
           ...budgetStatus,
-          alternatives: budgetStatus.exceeded ? highCredSources : [],
-          currentPageCredibility,
-          budgetClearedByThisPage
+          alternatives: budgetStatus.level !== 'normal' ? highCredSources : []
         });
         break;
 
       case 'clearCredibilityBudgetExceeded':
-        this.clearCredibilityBudgetExceeded();
+        // Compatibility action: interpreted as a manual reset request.
+        this.credibilityLoad = Math.max(0, this.credibilityLoad - 35);
+        this.lastCredibilityInterventionTs = Date.now();
+        this.saveTrackingState();
+        sendResponse({ success: true });
+        break;
+
+      case 'markCredibilityInterventionShown':
+        this.markCredibilityInterventionShown();
         this.saveTrackingState();
         sendResponse({ success: true });
         break;
@@ -2153,10 +2243,11 @@ class MindsetTracker {
         this.echoChamberDebt = false;
         this.echoChamberDebtBias = null;
         this.echoChamberDebtTimestamp = null;
-        // Clear credibility budget data
-        this.credibilityBudgetUsed = 0;
-        this.credibilityBudgetDate = null;
-        this.credibilityBudgetExceeded = false;
+        this.echoStateDateKey = null;
+        // Clear credibility recovery loop data
+        this.credibilityLoad = 0;
+        this.lastCredibilityEventTs = null;
+        this.lastCredibilityInterventionTs = null;
         this.saveTrackingState();
         sendResponse({ success: true });
         break;
@@ -2385,6 +2476,7 @@ class MindsetTracker {
 
   async saveTrackingState() {
     try {
+      this.checkAndResetDailyEchoState();
       const dataToStore = {
         isTracking: this.isTracking,
         userData: this.prepareDataForStorage(this.userData),
@@ -2394,10 +2486,11 @@ class MindsetTracker {
         echoChamberDebt: this.echoChamberDebt || false,
         echoChamberDebtBias: this.echoChamberDebtBias || null,
         echoChamberDebtTimestamp: this.echoChamberDebtTimestamp || null,
-        // Credibility budget state
-        credibilityBudgetUsed: this.credibilityBudgetUsed || 0,
-        credibilityBudgetDate: this.credibilityBudgetDate || null,
-        credibilityBudgetExceeded: this.credibilityBudgetExceeded || false
+        echoStateDateKey: this.echoStateDateKey || null,
+        // Credibility recovery loop state
+        credibilityLoad: this.credibilityLoad || 0,
+        lastCredibilityEventTs: this.lastCredibilityEventTs || null,
+        lastCredibilityInterventionTs: this.lastCredibilityInterventionTs || null
       };
 
       if (this.encryptionEnabled) {
@@ -2465,6 +2558,14 @@ class MindsetTracker {
         sanitized.interventionLevel = settings.interventionLevel;
       }
     }
+
+    // Credibility guidance mode
+    if (settings.credibilityGuidance !== undefined) {
+      const validModes = ['off', 'gentle', 'standard', 'strong'];
+      if (validModes.includes(settings.credibilityGuidance)) {
+        sanitized.credibilityGuidance = settings.credibilityGuidance;
+      }
+    }
     
     booleanSettings.forEach(setting => {
       if (settings[setting] !== undefined) {
@@ -2517,7 +2618,7 @@ class MindsetTracker {
 
     if (settings.echoChamberBreakerThreshold !== undefined) {
       const threshold = parseInt(settings.echoChamberBreakerThreshold);
-      if (!isNaN(threshold) && threshold >= 3 && threshold <= 10) {
+      if (!isNaN(threshold) && threshold >= 8 && threshold <= 20) {
         sanitized.echoChamberBreakerThreshold = threshold;
       }
     }

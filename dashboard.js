@@ -3,6 +3,7 @@ class DashboardManager {
   constructor() {
     this.userData = null;
     this.currentWeekData = null;
+    this.showDetails = false;
     this.historicalWeeksLimit = 8;
     this.visitsPageSize = 25;
     this.visitsCurrentPage = 0;
@@ -29,6 +30,15 @@ class DashboardManager {
   }
 
   setupEventListeners() {
+    const toggleDetailsBtn = document.getElementById('toggleDetailsBtn');
+    if (toggleDetailsBtn) {
+      toggleDetailsBtn.addEventListener('click', () => {
+        this.showDetails = !this.showDetails;
+        document.body.classList.toggle('details-open', this.showDetails);
+        toggleDetailsBtn.textContent = this.showDetails ? 'Hide Details' : 'Show Details';
+      });
+    }
+
     // Export button
     document.getElementById('exportBtn').addEventListener('click', () => {
       this.exportReport();
@@ -161,6 +171,7 @@ class DashboardManager {
   updateDashboard() {
     const methods = [
       ['updateReportHeader', () => this.updateReportHeader()],
+      ['updateFocusSummary', () => this.updateFocusSummary()],
       ['updateScores', () => this.updateScores()],
       ['updateEchoChamberSection', () => this.updateEchoChamberSection()],
       ['updateContentBreakdown', () => this.updateContentBreakdown()],
@@ -180,6 +191,44 @@ class DashboardManager {
       } catch (error) {
         console.error(`Dashboard error in ${name}:`, error);
       }
+    }
+  }
+
+  updateFocusSummary() {
+    const summaryEl = document.getElementById('focusSummaryText');
+    const actionEl = document.getElementById('focusActionText');
+    if (!summaryEl || !actionEl) return;
+
+    const scores = this.userData?.scores || {};
+    const weekData = this.currentWeekData;
+    const overall = scores.overallHealth || 0;
+    const diversity = scores.sourceDiversity || 0;
+    const tone = scores.contentTone || 0;
+    const perspective = scores.politicalBalance || 0;
+    const domains = this.getDomainCount(weekData);
+
+    if (!weekData || !weekData.visits || weekData.visits.length === 0) {
+      summaryEl.textContent = 'No data yet.';
+      actionEl.textContent = 'Action: Browse normally for a day to establish your baseline.';
+      return;
+    }
+
+    if (overall >= 8) {
+      summaryEl.textContent = 'Strong digital balance this week.';
+    } else if (overall >= 6) {
+      summaryEl.textContent = 'Healthy baseline with room to sharpen.';
+    } else {
+      summaryEl.textContent = 'Your inputs are drifting toward low quality or low variety.';
+    }
+
+    if (diversity < 6 || domains < 6) {
+      actionEl.textContent = 'Action: Add 2 high-credibility sources from a different viewpoint today.';
+    } else if (perspective < 6) {
+      actionEl.textContent = 'Action: Read one center or opposite-leaning source before your next news session.';
+    } else if (tone < 6) {
+      actionEl.textContent = 'Action: Replace one cynical feed check with an explanatory long-form source.';
+    } else {
+      actionEl.textContent = 'Action: Keep this mix and revisit next week for trend confirmation.';
     }
   }
 

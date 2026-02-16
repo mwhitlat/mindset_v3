@@ -1784,4 +1784,84 @@ body {
     .visits-table .title-cell {
         max-width: 120px;
     }
-} 
+}
+
+/* ==================== Focused UX Pass ==================== */
+:root {
+    --focus-bg: #f6fafc;
+    --focus-card: #ffffff;
+    --focus-border: #dbe6ee;
+    --focus-text: #1f2a37;
+    --focus-sub: #4e6378;
+    --focus-accent: #0b84b4;
+}
+
+body {
+    background: radial-gradient(circle at 8% 8%, #e9f8ff, transparent 40%), var(--focus-bg);
+    color: var(--focus-text);
+    font-family: "Avenir Next", "Gill Sans", "Trebuchet MS", sans-serif;
+}
+
+.logo-text {
+    font-family: Georgia, "Times New Roman", serif;
+}
+
+.focus-section {
+    margin: 22px 0 8px;
+}
+
+.focus-card {
+    background: linear-gradient(135deg, #0b84b4, #16a7c9);
+    color: #f6fbff;
+    border-radius: 16px;
+    padding: 18px;
+    box-shadow: 0 10px 24px rgba(15, 70, 90, 0.18);
+}
+
+.focus-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    opacity: 0.9;
+}
+
+.focus-text {
+    font-size: 24px;
+    line-height: 1.25;
+    font-weight: 700;
+    margin-top: 6px;
+}
+
+.focus-action {
+    margin-top: 10px;
+    background: rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    line-height: 1.3;
+}
+
+body:not(.details-open) .secondary-section {
+    display: none;
+}
+
+body:not(.details-open) .scores-grid .score-card:nth-child(n + 5) {
+    display: none;
+}
+
+#toggleDetailsBtn {
+    min-width: 118px;
+}
+
+@media (max-width: 768px) {
+    .focus-text {
+        font-size: 20px;
+    }
+
+    .header-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+}

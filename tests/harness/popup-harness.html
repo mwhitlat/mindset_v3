@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Popup Harness</title>
+  <style>
+    body { margin: 0; font-family: "Avenir Next", sans-serif; background: #0f1720; color: #e5eef7; }
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 14px; display: grid; grid-template-columns: 360px 1fr; gap: 12px; }
+    .card { background: #182332; border: 1px solid #2a3f58; border-radius: 10px; padding: 12px; }
+    h1 { margin: 0 0 8px; font-size: 18px; }
+    h2 { margin: 10px 0 8px; font-size: 14px; color: #98adc3; text-transform: uppercase; letter-spacing: 0.6px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    label { display: block; font-size: 12px; color: #b8c8d8; margin-bottom: 4px; }
+    input, select { width: 100%; box-sizing: border-box; border: 1px solid #35506d; background: #101927; color: #e7eef7; border-radius: 6px; padding: 7px; }
+    button { border: 0; border-radius: 8px; padding: 8px 10px; background: #1e81cf; color: #fff; cursor: pointer; }
+    button.secondary { background: #4a627a; }
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+    .preview { min-height: 680px; background: #f5f7fb; border-radius: 10px; overflow: hidden; border: 1px solid #2e3b4a; }
+    iframe { width: 100%; height: 680px; border: 0; }
+    .log { margin-top: 10px; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; background: #0d1521; border: 1px solid #33485f; border-radius: 8px; padding: 8px; max-height: 220px; overflow: auto; }
+    .toplink { color: #8bc8ff; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="card">
+      <h1>Popup Harness</h1>
+      <a class="toplink" href="/tests/harness/index.html">Back to Harness Index</a>
+
+      <h2>Scores</h2>
+      <div class="row">
+        <div><label>Overall Health</label><input id="overallHealth" type="number" step="0.1" value="6.8"></div>
+        <div><label>Source Diversity</label><input id="sourceDiversity" type="number" step="0.1" value="7.2"></div>
+      </div>
+      <div class="row">
+        <div><label>Content Tone</label><input id="contentTone" type="number" step="0.1" value="6.3"></div>
+        <div><label>Political Balance</label><input id="politicalBalance" type="number" step="0.1" value="6.1"></div>
+      </div>
+
+      <h2>Credibility Loop</h2>
+      <div class="row">
+        <div><label>Page Credibility</label><input id="pageCredibility" type="number" step="0.1" value="5.2"></div>
+        <div><label>Credibility Load</label><input id="credibilityLoad" type="number" value="64"></div>
+      </div>
+      <div class="row">
+        <div><label>Guidance Mode</label>
+          <select id="guidanceMode"><option>off</option><option>gentle</option><option selected>standard</option><option>strong</option></select>
+        </div>
+        <div><label>Same Story Eligible</label>
+          <select id="sameStoryEligible"><option value="true" selected>true</option><option value="false">false</option></select>
+        </div>
+      </div>
+
+      <h2>Weekly Shape</h2>
+      <div class="row">
+        <div><label>Visits Count</label><input id="visitsCount" type="number" value="28"></div>
+        <div><label>Domains Count</label><input id="domainsCount" type="number" value="8"></div>
+      </div>
+      <div class="row">
+        <div><label>Category Focus</label><select id="categoryFocus"><option selected>balanced</option><option>news</option><option>social</option></select></div>
+        <div><label>Bias Focus</label><select id="biasFocus"><option selected>balanced</option><option>left</option><option>right</option></select></div>
+      </div>
+      <div><label>Tone Focus</label><select id="toneFocus"><option selected>neutral</option><option>uplifting</option><option>cynical</option></select></div>
+
+      <div class="row" style="margin-top:8px;">
+        <div><label>Page Category</label><select id="pageCategory"><option selected>news</option><option>social</option><option>entertainment</option></select></div>
+        <div><label>Page Bias</label><select id="pageBias"><option selected>left</option><option>centrist</option><option>right</option></select></div>
+      </div>
+      <div><label>Page Tone</label><select id="pageTone"><option selected>neutral</option><option>uplifting</option><option>cynical</option></select></div>
+
+      <div class="actions">
+        <button id="applyBtn">Apply</button>
+        <button id="resetBtn" class="secondary">Reset</button>
+      </div>
+
+      <div id="log" class="log"></div>
+    </section>
+
+    <section class="card">
+      <div class="preview"><iframe id="previewFrame" title="popup-preview"></iframe></div>
+    </section>
+  </div>
+
+  <script>window.HARNESS_TARGET = 'popup';</script>
+  <script src="/tests/harness/page-harness.js"></script>
+</body>
+</html>

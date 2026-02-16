@@ -16,6 +16,9 @@
                     <span class="logo-text">Mindset</span>
                 </div>
                 <div class="header-actions">
+                    <button class="btn btn-secondary" id="toggleDetailsBtn">
+                        Show Details
+                    </button>
                     <button class="btn btn-secondary" id="exportBtn">
                         <span class="btn-icon">📤</span>
                         Export Report
@@ -45,6 +48,14 @@
                         <span class="summary-label">Data Points</span>
                         <span class="summary-value" id="totalDataPoints">0</span>
                     </div>
+                </div>
+            </section>
+
+            <section class="focus-section">
+                <div class="focus-card">
+                    <div class="focus-label">This Week At A Glance</div>
+                    <div class="focus-text" id="focusSummaryText">Loading summary...</div>
+                    <div class="focus-action" id="focusActionText">Loading next action...</div>
                 </div>
             </section>
 
@@ -192,7 +203,7 @@
             </section>
 
             <!-- Content Breakdown -->
-            <section class="content-breakdown">
+            <section class="content-breakdown secondary-section">
                 <h2>Content Breakdown</h2>
                 <div class="breakdown-container">
                     <div class="breakdown-chart">
@@ -240,7 +251,7 @@
             </section>
 
             <!-- Time Analysis -->
-            <section class="time-analysis">
+            <section class="time-analysis secondary-section">
                 <h2>Time Analysis</h2>
                 <div class="time-container">
                     <div class="time-stats">
@@ -294,7 +305,7 @@
             </section>
 
             <!-- Tone & Political Analysis -->
-            <section class="tone-political-analysis">
+            <section class="tone-political-analysis secondary-section">
                 <div class="analysis-grid">
                     <div class="analysis-card">
                         <h3>Content Tone Analysis</h3>
@@ -353,7 +364,7 @@
             </section>
 
             <!-- Insights & Recommendations -->
-            <section class="insights-recommendations">
+            <section class="insights-recommendations secondary-section">
                 <h2>Insights & Recommendations</h2>
                 <div class="insights-container">
                     <div class="insights-list" id="insightsList">
@@ -369,7 +380,7 @@
             </section>
 
             <!-- Historical Trends Section -->
-            <section class="history-section">
+            <section class="history-section secondary-section">
                 <h2>Trends Over Time</h2>
 
                 <!-- Import History Banner (shown when little/no data) -->
@@ -449,7 +460,7 @@
             </section>
 
             <!-- Raw Visit Data Section -->
-            <section class="visits-section">
+            <section class="visits-section secondary-section">
                 <h2>Browsing History</h2>
 
                 <!-- Week Filter -->
@@ -494,7 +505,7 @@
             </section>
 
             <!-- Shareable Report Card -->
-            <section class="shareable-report">
+            <section class="shareable-report secondary-section">
                 <h2>Share Your Report</h2>
                 <div class="share-card" id="shareCard">
                     <div class="share-header">
