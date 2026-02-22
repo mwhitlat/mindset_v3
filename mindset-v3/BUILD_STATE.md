@@ -45,7 +45,7 @@
   - Stabilized sandbox compact density behavior with explicit layout changes (`popup.css`, `popup.js`)
   - Added Phase 4 automated checks, script alias, and validation runbook (`scripts/phase1-smoke-v3.mjs`, `package.json`, `PHASE4_VALIDATION.md`)
 - Next Atomic Task:
-  - None. Phase 4 is closed; roadmap build phases are complete.
+  - None. Roadmap build phases complete; scope frozen to bug-fix/reliability/docs only.
 - Known Issues:
   - `MINDSET_ACTIVE_CHARTER.md` currently describes Phase 6, so Phase 1 scope is anchored primarily by Build Envelope + Roadmap in this workspace.
   - Build Envelope references deterministic LLM prompting, but implementation is intentionally local-only per operator direction.
