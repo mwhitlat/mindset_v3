@@ -1,6 +1,6 @@
 # BUILD STATE
 
-- Current Phase: Phase 1 (Weeks 1-4) - Reflection-only MVP
+- Current Phase: Phase 2 (Weeks 5-6) - Governance Lite
 - Phase Status: Complete (Stop condition reached)
 - Completed Tasks:
   - Created Manifest v3 extension skeleton (`manifest.json`)
@@ -15,8 +15,22 @@
   - Added local performance diagnostics capture and popup visibility (`background.js`, `popup.html`, `popup.js`)
   - Removed all LLM integration and settings UI to keep reflection fully local and Phase 1 minimal (`background.js`, `manifest.json`, `popup.html`, `popup.js`)
   - Added explicit popup note that reflection is generated locally from weekly aggregates (`popup.html`)
+  - Created Phase 2 build envelope document for Weeks 5-6 governance-lite scope (`# Mindset – Phase 2 Build Envelope.md`)
+  - Implemented local append-only governance proposal log writer and read endpoint (`background.js`)
+  - Added governance proposal entry schema (`governance-proposal-schema.json`)
+  - Added smoke validation for governance proposal append/read path (`scripts/phase1-smoke-v3.mjs`)
+  - Implemented governance config with `review_required` toggle and enforced pending-only proposal application (`background.js`)
+  - Added smoke validation for manual review toggle enforcement and proposal status apply path (`scripts/phase1-smoke-v3.mjs`)
+  - Implemented single-step rollback to last approved snapshot with rollback event logging (`background.js`)
+  - Added smoke validation for rollback snapshot restore and rollback log event (`scripts/phase1-smoke-v3.mjs`)
+  - Implemented trust proxies v1 local metrics and update endpoints (`background.js`)
+  - Added trust proxy diagnostics section and controls in popup (`popup.html`, `popup.css`, `popup.js`)
+  - Added smoke validation for trust proxy counter updates and uninstall flag (`scripts/phase1-smoke-v3.mjs`)
+  - Added popup governance controls for manual review toggle and rollback trigger (`popup.html`, `popup.js`)
+  - Added compact governance diagnostics list for latest proposal entries in popup (`popup.html`, `popup.css`, `popup.js`)
+  - Added Phase 2 validation runbook and script alias (`PHASE2_VALIDATION.md`, `package.json`)
 - Next Atomic Task:
-  - None. Phase 1 is closed.
+  - None. Phase 2 is closed.
 - Known Issues:
   - `MINDSET_ACTIVE_CHARTER.md` currently describes Phase 6, so Phase 1 scope is anchored primarily by Build Envelope + Roadmap in this workspace.
   - Build Envelope references deterministic LLM prompting, but implementation is intentionally local-only per operator direction.

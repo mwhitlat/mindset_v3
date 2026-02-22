@@ -75,6 +75,334 @@ try {
     assert(!reflection.includes("you should"), "Reflection includes advisory language.");
     assert(!reflection.includes("to improve"), "Reflection includes prescriptive language.");
   });
+
+  await runCheck("Appends and reads governance proposal log", async () => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`, { waitUntil: "domcontentloaded" });
+
+    const entry = await page.evaluate(async () => {
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          {
+            type: "append-governance-proposal",
+            payload: {
+              proposedChangeSummary: "Smoke test proposal append check",
+              triggeringChecks: ["smoke-check"]
+            }
+          },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+              return;
+            }
+            if (!response || !response.ok) {
+              reject(new Error(response?.error || "append-governance-proposal failed"));
+              return;
+            }
+            resolve(response.entry);
+          }
+        );
+      });
+    });
+
+    assert(entry && typeof entry.id === "string", "Proposal entry id missing.");
+
+    const entries = await page.evaluate(async () => {
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: "get-governance-proposals" }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          if (!response || !response.ok) {
+            reject(new Error(response?.error || "get-governance-proposals failed"));
+            return;
+          }
+          resolve(response.entries);
+        });
+      });
+    });
+
+    assert(Array.isArray(entries), "Proposal log response is not an array.");
+    assert(entries.some((item) => item.id === entry.id), "Appended proposal was not found in proposal log.");
+  });
+
+  await runCheck("Enforces manual review toggle behavior", async () => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`, { waitUntil: "domcontentloaded" });
+
+    const config = await page.evaluate(async () => {
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          { type: "set-governance-review-required", payload: { reviewRequired: true } },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+              return;
+            }
+            if (!response || !response.ok) {
+              reject(new Error(response?.error || "set-governance-review-required failed"));
+              return;
+            }
+            resolve(response.config);
+          }
+        );
+      });
+    });
+
+    assert(config && config.review_required === true, "review_required did not persist as true.");
+
+    const disallowedResult = await page.evaluate(async () => {
+      return new Promise((resolve) => {
+        chrome.runtime.sendMessage(
+          {
+            type: "append-governance-proposal",
+            payload: {
+              proposedChangeSummary: "Should fail when review is required",
+              triggeringChecks: ["smoke-check"],
+              status: "approved"
+            }
+          },
+          (response) => resolve(response)
+        );
+      });
+    });
+
+    assert(disallowedResult && disallowedResult.ok === false, "Non-pending proposal was incorrectly accepted.");
+
+    const pendingEntry = await page.evaluate(async () => {
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          {
+            type: "append-governance-proposal",
+            payload: {
+              proposedChangeSummary: "Pending proposal for apply test",
+              triggeringChecks: ["smoke-check"]
+            }
+          },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+              return;
+            }
+            if (!response || !response.ok) {
+              reject(new Error(response?.error || "pending append failed"));
+              return;
+            }
+            resolve(response.entry);
+          }
+        );
+      });
+    });
+
+    const appliedEntry = await page.evaluate(async (proposalId) => {
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          {
+            type: "apply-governance-proposal-status",
+            payload: {
+              proposalId,
+              status: "approved"
+            }
+          },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+              return;
+            }
+            if (!response || !response.ok) {
+              reject(new Error(response?.error || "apply-governance-proposal-status failed"));
+              return;
+            }
+            resolve(response.entry);
+          }
+        );
+      });
+    }, pendingEntry.id);
+
+    assert(appliedEntry.status === "approved", "Pending proposal was not transitioned to approved.");
+  });
+
+  await runCheck("Rolls back to last approved snapshot and logs event", async () => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`, { waitUntil: "domcontentloaded" });
+
+    await page.evaluate(async () => {
+      await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          { type: "set-governance-review-required", payload: { reviewRequired: false } },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+              return;
+            }
+            if (!response || !response.ok) {
+              reject(new Error(response?.error || "failed to set review_required=false"));
+              return;
+            }
+            resolve(response.config);
+          }
+        );
+      });
+    });
+
+    const pendingEntry = await page.evaluate(async () => {
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          {
+            type: "append-governance-proposal",
+            payload: {
+              proposedChangeSummary: "Create approved snapshot for rollback test",
+              triggeringChecks: ["smoke-check"]
+            }
+          },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+              return;
+            }
+            if (!response || !response.ok) {
+              reject(new Error(response?.error || "failed to append pending proposal"));
+              return;
+            }
+            resolve(response.entry);
+          }
+        );
+      });
+    });
+
+    await page.evaluate(async (proposalId) => {
+      await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          {
+            type: "apply-governance-proposal-status",
+            payload: { proposalId, status: "approved" }
+          },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+              return;
+            }
+            if (!response || !response.ok) {
+              reject(new Error(response?.error || "failed to approve proposal"));
+              return;
+            }
+            resolve(response.entry);
+          }
+        );
+      });
+    }, pendingEntry.id);
+
+    await page.evaluate(async () => {
+      await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          { type: "set-governance-review-required", payload: { reviewRequired: true } },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+              return;
+            }
+            if (!response || !response.ok) {
+              reject(new Error(response?.error || "failed to set review_required=true"));
+              return;
+            }
+            resolve(response.config);
+          }
+        );
+      });
+    });
+
+    const rollbackResult = await page.evaluate(async () => {
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: "rollback-governance-snapshot" }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          if (!response || !response.ok) {
+            reject(new Error(response?.error || "rollback-governance-snapshot failed"));
+            return;
+          }
+          resolve(response);
+        });
+      });
+    });
+
+    assert(
+      rollbackResult.snapshot?.governanceConfig?.review_required === false,
+      "Rollback snapshot did not restore expected governance config."
+    );
+    assert(
+      rollbackResult.rollbackEntry?.status === "rolled_back",
+      "Rollback event was not logged with rolled_back status."
+    );
+  });
+
+  await runCheck("Tracks trust proxies counters and uninstall flag", async () => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`, { waitUntil: "domcontentloaded" });
+
+    const before = await page.evaluate(async () => {
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: "get-trust-proxies" }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          if (!response || !response.ok) {
+            reject(new Error(response?.error || "get-trust-proxies failed"));
+            return;
+          }
+          resolve(response.metrics);
+        });
+      });
+    });
+
+    const incremented = await page.evaluate(async () => {
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          { type: "increment-trust-proxy", payload: { counter: "negativeFeedbackCount" } },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+              return;
+            }
+            if (!response || !response.ok) {
+              reject(new Error(response?.error || "increment-trust-proxy failed"));
+              return;
+            }
+            resolve(response.metrics);
+          }
+        );
+      });
+    });
+
+    assert(
+      incremented.negativeFeedbackCount === before.negativeFeedbackCount + 1,
+      "negativeFeedbackCount did not increment."
+    );
+
+    const flagged = await page.evaluate(async () => {
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          { type: "set-uninstall-proxy-flag", payload: { value: true } },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+              return;
+            }
+            if (!response || !response.ok) {
+              reject(new Error(response?.error || "set-uninstall-proxy-flag failed"));
+              return;
+            }
+            resolve(response.metrics);
+          }
+        );
+      });
+    });
+
+    assert(flagged.uninstallProxyFlag === true, "Uninstall proxy flag did not set to true.");
+  });
 } finally {
   await context.close();
 }
