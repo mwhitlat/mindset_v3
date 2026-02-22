@@ -19,6 +19,10 @@ const sandboxVariantSelect = document.getElementById("sandboxVariantSelect");
 const sandboxStatusText = document.getElementById("sandboxStatusText");
 const runDensityCheckButton = document.getElementById("runDensityCheckButton");
 const densityBlock = document.getElementById("densityBlock");
+const runInvariantCheckButton = document.getElementById("runInvariantCheckButton");
+const refreshTrustTrendButton = document.getElementById("refreshTrustTrendButton");
+const invariantBlock = document.getElementById("invariantBlock");
+const trustTrendBlock = document.getElementById("trustTrendBlock");
 const governanceSection = document.getElementById("governanceSection");
 const replaySection = document.getElementById("replaySection");
 const exposureSection = document.getElementById("exposureSection");
@@ -151,6 +155,26 @@ runDensityCheckButton.addEventListener("click", async () => {
   }
 });
 
+runInvariantCheckButton.addEventListener("click", async () => {
+  runInvariantCheckButton.disabled = true;
+  try {
+    const result = await sendRuntimeMessage({ type: "run-invariant-check" });
+    renderInvariantCheck(result);
+  } catch (error) {
+    invariantBlock.textContent = "";
+    const row = document.createElement("p");
+    row.className = "label";
+    row.textContent = `Invariant check failed: ${error.message}`;
+    invariantBlock.appendChild(row);
+  } finally {
+    runInvariantCheckButton.disabled = false;
+  }
+});
+
+refreshTrustTrendButton.addEventListener("click", async () => {
+  await loadTrustTrend();
+});
+
 loadLatestReport();
 
 async function loadLatestReport() {
@@ -160,6 +184,7 @@ async function loadLatestReport() {
   await loadReplaySnapshots();
   await loadSandboxConfig();
   await loadTrustProxies();
+  await loadTrustTrend();
   renderPerformance(data.lastPerformanceMetrics || null);
   if (!data.latestWeeklyReport) {
     await loadExposureSuggestions();
@@ -424,6 +449,84 @@ function renderDensityCheck(check) {
   }
 }
 
+function renderInvariantCheck(result) {
+  invariantBlock.textContent = "";
+  const header = document.createElement("p");
+  header.className = "label";
+  header.textContent = `Status: ${String(result.status || "unknown").toUpperCase()}`;
+  invariantBlock.appendChild(header);
+
+  if (!Array.isArray(result.warnings) || result.warnings.length === 0) {
+    const ok = document.createElement("p");
+    ok.className = "label";
+    ok.textContent = "No invariant warnings.";
+    invariantBlock.appendChild(ok);
+    return;
+  }
+
+  for (const warning of result.warnings) {
+    const row = document.createElement("div");
+    row.className = "log-item";
+    const line = document.createElement("p");
+    line.className = "label";
+    line.textContent = warning;
+    row.appendChild(line);
+    invariantBlock.appendChild(row);
+  }
+}
+
+async function loadTrustTrend() {
+  try {
+    const trend = await sendRuntimeMessage({ type: "get-trust-trend" });
+    renderTrustTrend(trend);
+  } catch (error) {
+    trustTrendBlock.textContent = "";
+    const row = document.createElement("p");
+    row.className = "label";
+    row.textContent = `Trust trend load failed: ${error.message}`;
+    trustTrendBlock.appendChild(row);
+  }
+}
+
+function renderTrustTrend(trend) {
+  trustTrendBlock.textContent = "";
+  const warnings = Array.isArray(trend.warnings) ? trend.warnings : [];
+  const recent = Array.isArray(trend.recent) ? trend.recent : [];
+
+  const warningHeader = document.createElement("p");
+  warningHeader.className = "label";
+  warningHeader.textContent = warnings.length === 0 ? "No trust warnings." : `Warnings: ${warnings.length}`;
+  trustTrendBlock.appendChild(warningHeader);
+
+  for (const warning of warnings) {
+    const row = document.createElement("div");
+    row.className = "log-item";
+    const line = document.createElement("p");
+    line.className = "label";
+    line.textContent = warning;
+    row.appendChild(line);
+    trustTrendBlock.appendChild(row);
+  }
+
+  if (recent.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "label";
+    empty.textContent = "No trust trend history yet.";
+    trustTrendBlock.appendChild(empty);
+    return;
+  }
+
+  const latest = recent[recent.length - 1];
+  const latestRow = document.createElement("div");
+  latestRow.className = "log-item";
+  const latestText = document.createElement("p");
+  latestText.className = "label";
+  latestText.textContent =
+    `Latest: feedback=${latest.negativeFeedbackCount}, disable=${latest.sectionDisablementCount}, reopen=${latest.reportReopenCount}, uninstall=${latest.uninstallProxyFlag ? "yes" : "no"}`;
+  latestRow.appendChild(latestText);
+  trustTrendBlock.appendChild(latestRow);
+}
+
 async function loadGovernanceProposals() {
   try {
     const entries = await sendRuntimeMessage({ type: "get-governance-proposals" });
@@ -679,6 +782,10 @@ function sendRuntimeMessage(message) {
       }
       if ("check" in response) {
         resolve(response.check);
+        return;
+      }
+      if ("trend" in response) {
+        resolve(response.trend);
         return;
       }
       resolve(response);

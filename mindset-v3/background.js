@@ -6,6 +6,7 @@ const PROPOSAL_LOG_KEY = "governanceProposalLog";
 const GOVERNANCE_CONFIG_KEY = "governanceConfig";
 const STABLE_SNAPSHOT_KEY = "governanceStableSnapshot";
 const TRUST_PROXIES_KEY = "trustProxyMetrics";
+const TRUST_TREND_KEY = "trustProxyTrend";
 const REPLAY_SNAPSHOTS_KEY = "replaySnapshots";
 const SANDBOX_CONFIG_KEY = "sandboxConfig";
 const PROPOSAL_STATUS_VALUES = new Set(["pending", "approved", "rejected", "rolled_back"]);
@@ -33,6 +34,7 @@ const TAG_ADJACENT_DOMAINS = {
   video: ["vimeo.com", "pbs.org", "ted.com"],
   default: ["wikipedia.org", "reuters.com", "bbc.com"]
 };
+const REFLECTION_PROHIBITED_PHRASES = ["you should", "to improve", "must", "need to", "should avoid"];
 
 const serviceWorkerStartMs = Date.now();
 
@@ -43,7 +45,8 @@ chrome.runtime.onInstalled.addListener(() => {
     ensureGovernanceConfig(),
     ensureTrustProxies(),
     ensureReplaySnapshots(),
-    ensureSandboxConfig()
+    ensureSandboxConfig(),
+    ensureTrustTrend()
   ])
     .catch((error) => {
       console.error("Mindset initialization failed:", error);
@@ -182,6 +185,20 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "run-density-check") {
     runDensityCheck()
       .then((check) => sendResponse({ ok: true, check }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message.type === "run-invariant-check") {
+    runInvariantCheck()
+      .then((result) => sendResponse({ ok: true, result }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message.type === "get-trust-trend") {
+    getTrustTrend()
+      .then((trend) => sendResponse({ ok: true, trend }))
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
   }
@@ -545,15 +562,15 @@ async function ensureTrustProxies() {
   const data = await chrome.storage.local.get([TRUST_PROXIES_KEY]);
   const current = data[TRUST_PROXIES_KEY];
   if (!isValidTrustProxies(current)) {
-    await chrome.storage.local.set({
-      [TRUST_PROXIES_KEY]: {
-        negativeFeedbackCount: 0,
-        sectionDisablementCount: 0,
-        reportReopenCount: 0,
-        uninstallProxyFlag: false,
-        updatedAt: new Date().toISOString()
-      }
-    });
+    const baseline = {
+      negativeFeedbackCount: 0,
+      sectionDisablementCount: 0,
+      reportReopenCount: 0,
+      uninstallProxyFlag: false,
+      updatedAt: new Date().toISOString()
+    };
+    await chrome.storage.local.set({ [TRUST_PROXIES_KEY]: baseline });
+    await appendTrustTrend(baseline);
   }
 }
 
@@ -582,6 +599,7 @@ async function incrementTrustProxyCounter(counter) {
   metrics[counterName] += 1;
   metrics.updatedAt = new Date().toISOString();
   await chrome.storage.local.set({ [TRUST_PROXIES_KEY]: metrics });
+  await appendTrustTrend(metrics);
   return metrics;
 }
 
@@ -594,6 +612,7 @@ async function setUninstallProxyFlag(value) {
   metrics.uninstallProxyFlag = value;
   metrics.updatedAt = new Date().toISOString();
   await chrome.storage.local.set({ [TRUST_PROXIES_KEY]: metrics });
+  await appendTrustTrend(metrics);
   return metrics;
 }
 
@@ -728,17 +747,36 @@ async function getExposureSuggestions() {
     return [];
   }
 
-  return report.summary.topDomains.slice(0, 3).map((item) => {
+  const buckets = report.summary.topDomains.slice(0, 4).map((item) => {
     const sourceDomain = String(item.domain || "unknown");
     const tag = classifyDomainTag(sourceDomain);
     const adjacent = TAG_ADJACENT_DOMAINS[tag] || TAG_ADJACENT_DOMAINS.default;
     const suggestions = adjacent.filter((domain) => domain !== sourceDomain).slice(0, 3);
     return {
       sourceDomain,
+      tag,
       framing: "Here are adjacent perspectives on this topic.",
       suggestions
     };
   });
+
+  // Tighten symmetry by keeping the same suggestion count across rows and stable ordering.
+  const normalizedCount = Math.max(
+    1,
+    Math.min(
+      3,
+      ...buckets.map((item) => item.suggestions.length).filter((count) => Number.isFinite(count) && count > 0)
+    )
+  );
+
+  return buckets
+    .map((item) => ({
+      sourceDomain: item.sourceDomain,
+      tag: item.tag,
+      framing: item.framing,
+      suggestions: item.suggestions.slice(0, normalizedCount).sort()
+    }))
+    .sort((a, b) => a.sourceDomain.localeCompare(b.sourceDomain));
 }
 
 function classifyDomainTag(domain) {
@@ -811,6 +849,12 @@ async function runDensityCheck() {
       pass: topDomainCount <= 8,
       value: topDomainCount,
       limit: "<=8"
+    },
+    {
+      name: "summary_row_balance",
+      pass: topDomainCount >= 0 && topDomainCount <= 8,
+      value: topDomainCount,
+      limit: "stable row count"
     }
   ];
 
@@ -819,4 +863,82 @@ async function runDensityCheck() {
     checks,
     generatedAt: new Date().toISOString()
   };
+}
+
+async function runInvariantCheck() {
+  const data = await chrome.storage.local.get(["latestWeeklyReport"]);
+  const report = data.latestWeeklyReport;
+  if (!report) {
+    return {
+      status: "warn",
+      warnings: ["No report found for invariant check."],
+      checkedAt: new Date().toISOString()
+    };
+  }
+
+  const warnings = [];
+  const reflection = String(report.reflection || "").toLowerCase();
+  for (const phrase of REFLECTION_PROHIBITED_PHRASES) {
+    if (reflection.includes(phrase)) {
+      warnings.push(`Potentially prescriptive phrase detected: "${phrase}"`);
+    }
+  }
+
+  if (!reflection.includes("distribution overview")) {
+    warnings.push("Expected reflection heading missing: Distribution Overview.");
+  }
+
+  return {
+    status: warnings.length === 0 ? "pass" : "warn",
+    warnings,
+    checkedAt: new Date().toISOString()
+  };
+}
+
+async function ensureTrustTrend() {
+  const data = await chrome.storage.local.get([TRUST_TREND_KEY]);
+  if (!Array.isArray(data[TRUST_TREND_KEY])) {
+    await chrome.storage.local.set({ [TRUST_TREND_KEY]: [] });
+  }
+}
+
+async function getTrustTrend() {
+  const data = await chrome.storage.local.get([TRUST_TREND_KEY]);
+  if (!Array.isArray(data[TRUST_TREND_KEY])) {
+    return { recent: [], warnings: [] };
+  }
+
+  const recent = data[TRUST_TREND_KEY].slice(-10);
+  const latest = recent[recent.length - 1];
+  const warnings = [];
+
+  if (latest) {
+    if (latest.negativeFeedbackCount >= 3) {
+      warnings.push("Negative feedback count reached threshold (>=3).");
+    }
+    if (latest.sectionDisablementCount >= 3) {
+      warnings.push("Section disablement count reached threshold (>=3).");
+    }
+    if (latest.uninstallProxyFlag) {
+      warnings.push("Uninstall proxy flag is enabled.");
+    }
+  }
+
+  return { recent, warnings };
+}
+
+async function appendTrustTrend(metrics) {
+  const data = await chrome.storage.local.get([TRUST_TREND_KEY]);
+  const trend = Array.isArray(data[TRUST_TREND_KEY]) ? data[TRUST_TREND_KEY] : [];
+  trend.push({
+    timestamp: metrics.updatedAt,
+    negativeFeedbackCount: metrics.negativeFeedbackCount,
+    sectionDisablementCount: metrics.sectionDisablementCount,
+    reportReopenCount: metrics.reportReopenCount,
+    uninstallProxyFlag: metrics.uninstallProxyFlag
+  });
+  while (trend.length > 50) {
+    trend.shift();
+  }
+  await chrome.storage.local.set({ [TRUST_TREND_KEY]: trend });
 }

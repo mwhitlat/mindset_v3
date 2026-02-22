@@ -517,6 +517,48 @@ try {
     assert(check && Array.isArray(check.checks), "Density check payload missing checks.");
     assert(check.checks.length >= 3, "Density check did not include expected checks.");
   });
+
+  await runCheck("Runs invariant checks and reads trust trend", async () => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`, { waitUntil: "domcontentloaded" });
+
+    const invariant = await page.evaluate(async () => {
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: "run-invariant-check" }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          if (!response || !response.ok) {
+            reject(new Error(response?.error || "run-invariant-check failed"));
+            return;
+          }
+          resolve(response.result);
+        });
+      });
+    });
+
+    assert(invariant && typeof invariant.status === "string", "Invariant check did not return status.");
+
+    const trend = await page.evaluate(async () => {
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: "get-trust-trend" }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          if (!response || !response.ok) {
+            reject(new Error(response?.error || "get-trust-trend failed"));
+            return;
+          }
+          resolve(response.trend);
+        });
+      });
+    });
+
+    assert(Array.isArray(trend.recent), "Trust trend recent data missing.");
+    assert(Array.isArray(trend.warnings), "Trust trend warnings missing.");
+  });
 } finally {
   await context.close();
 }

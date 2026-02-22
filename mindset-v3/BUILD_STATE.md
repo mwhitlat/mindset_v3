@@ -1,6 +1,6 @@
 # BUILD STATE
 
-- Current Phase: Phase 3 (Weeks 7-8) - Replay, Exposure, Sandbox, Density
+- Current Phase: Phase 4 (Weeks 9-12) - Calibration and Stabilization
 - Phase Status: Complete (Stop condition reached)
 - Completed Tasks:
   - Created Manifest v3 extension skeleton (`manifest.json`)
@@ -39,8 +39,13 @@
   - Added Phase 3 automated checks to smoke suite and script alias (`scripts/phase1-smoke-v3.mjs`, `package.json`)
   - Added Phase 3 validation runbook (`PHASE3_VALIDATION.md`)
   - Created Phase 4 build envelope aligned to roadmap Weeks 9-12 (`# Mindset – Phase 4 Build Envelope.md`)
+  - Added invariant calibration API and popup diagnostics view (`background.js`, `popup.html`, `popup.js`)
+  - Added trust trend history + threshold warnings and popup rendering (`background.js`, `popup.js`)
+  - Tightened exposure symmetry normalization and deterministic ordering (`background.js`)
+  - Stabilized sandbox compact density behavior with explicit layout changes (`popup.css`, `popup.js`)
+  - Added Phase 4 automated checks, script alias, and validation runbook (`scripts/phase1-smoke-v3.mjs`, `package.json`, `PHASE4_VALIDATION.md`)
 - Next Atomic Task:
-  - Start Phase 4 Task 1: calibrate invariant checks and add trust proxy trend diagnostics.
+  - None. Phase 4 is closed; roadmap build phases are complete.
 - Known Issues:
   - `MINDSET_ACTIVE_CHARTER.md` currently describes Phase 6, so Phase 1 scope is anchored primarily by Build Envelope + Roadmap in this workspace.
   - Build Envelope references deterministic LLM prompting, but implementation is intentionally local-only per operator direction.
