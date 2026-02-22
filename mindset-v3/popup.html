@@ -38,7 +38,7 @@
         </div>
       </section>
 
-      <section class="section">
+      <section class="section" id="governanceSection">
         <h2 class="body">Governance</h2>
         <label class="inline-toggle">
           <input id="reviewRequiredCheckbox" type="checkbox">
@@ -50,6 +50,51 @@
         <p id="governanceStatusText" class="label">Governance controls ready.</p>
         <div id="proposalLogList" class="log-list">
           <p class="label">No governance proposals logged yet.</p>
+        </div>
+      </section>
+
+      <section class="section" id="replaySection">
+        <h2 class="body">Replay Lite</h2>
+        <div class="actions-row">
+          <button id="createReplaySnapshotButton" class="button" type="button">Create Replay Snapshot</button>
+          <button id="runReplayDiffButton" class="button" type="button">Run Replay Diff</button>
+        </div>
+        <p id="replayStatusText" class="label">Replay tools ready.</p>
+        <div id="replayDiffBlock" class="log-list">
+          <p class="label">No replay diff available yet.</p>
+        </div>
+      </section>
+
+      <section class="section" id="exposureSection">
+        <h2 class="body">Exposure</h2>
+        <div id="exposureBlock" class="log-list">
+          <p class="label">Generate a report to view adjacent perspective options.</p>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="body">Sandbox</h2>
+        <label class="inline-toggle">
+          <input id="sandboxEnabledCheckbox" type="checkbox">
+          <span class="label">Sandbox Mode Enabled</span>
+        </label>
+        <label class="label" for="sandboxVariantSelect">Variant</label>
+        <select id="sandboxVariantSelect" class="select">
+          <option value="baseline">baseline</option>
+          <option value="compact">compact</option>
+          <option value="replay_focus">replay_focus</option>
+          <option value="exposure_focus">exposure_focus</option>
+        </select>
+        <p id="sandboxStatusText" class="label">Sandbox controls ready.</p>
+      </section>
+
+      <section class="section">
+        <h2 class="body">Density</h2>
+        <div class="actions-row">
+          <button id="runDensityCheckButton" class="button" type="button">Run Density Check</button>
+        </div>
+        <div id="densityBlock" class="log-list">
+          <p class="label">No density check run yet.</p>
         </div>
       </section>
 

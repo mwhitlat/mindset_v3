@@ -6,13 +6,45 @@ const PROPOSAL_LOG_KEY = "governanceProposalLog";
 const GOVERNANCE_CONFIG_KEY = "governanceConfig";
 const STABLE_SNAPSHOT_KEY = "governanceStableSnapshot";
 const TRUST_PROXIES_KEY = "trustProxyMetrics";
+const REPLAY_SNAPSHOTS_KEY = "replaySnapshots";
+const SANDBOX_CONFIG_KEY = "sandboxConfig";
 const PROPOSAL_STATUS_VALUES = new Set(["pending", "approved", "rejected", "rolled_back"]);
 const TRUST_PROXY_COUNTERS = new Set(["negativeFeedbackCount", "sectionDisablementCount", "reportReopenCount"]);
+const SANDBOX_VARIANTS = new Set(["baseline", "compact", "replay_focus", "exposure_focus"]);
+const DOMAIN_TAG_RULES = [
+  { pattern: "news", tag: "general_news" },
+  { pattern: "times", tag: "general_news" },
+  { pattern: "post", tag: "general_news" },
+  { pattern: "finance", tag: "finance" },
+  { pattern: "market", tag: "finance" },
+  { pattern: "invest", tag: "finance" },
+  { pattern: "tech", tag: "technology" },
+  { pattern: "verge", tag: "technology" },
+  { pattern: "github", tag: "technology" },
+  { pattern: "reddit", tag: "community" },
+  { pattern: "x.com", tag: "community" },
+  { pattern: "youtube", tag: "video" }
+];
+const TAG_ADJACENT_DOMAINS = {
+  general_news: ["apnews.com", "reuters.com", "bbc.com"],
+  finance: ["wsj.com", "marketwatch.com", "bloomberg.com"],
+  technology: ["arstechnica.com", "wired.com", "theverge.com"],
+  community: ["lobste.rs", "news.ycombinator.com", "medium.com"],
+  video: ["vimeo.com", "pbs.org", "ted.com"],
+  default: ["wikipedia.org", "reuters.com", "bbc.com"]
+};
 
 const serviceWorkerStartMs = Date.now();
 
 chrome.runtime.onInstalled.addListener(() => {
-  Promise.all([ensureDb(), ensureProposalLog(), ensureGovernanceConfig(), ensureTrustProxies()])
+  Promise.all([
+    ensureDb(),
+    ensureProposalLog(),
+    ensureGovernanceConfig(),
+    ensureTrustProxies(),
+    ensureReplaySnapshots(),
+    ensureSandboxConfig()
+  ])
     .catch((error) => {
       console.error("Mindset initialization failed:", error);
     });
@@ -101,6 +133,55 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "set-uninstall-proxy-flag") {
     setUninstallProxyFlag(message.payload?.value)
       .then((metrics) => sendResponse({ ok: true, metrics }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message.type === "create-replay-snapshot") {
+    createReplaySnapshot()
+      .then((snapshot) => sendResponse({ ok: true, snapshot }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message.type === "get-replay-snapshots") {
+    getReplaySnapshots()
+      .then((snapshots) => sendResponse({ ok: true, snapshots }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message.type === "run-replay-diff") {
+    runReplayDiff(message.payload?.snapshotId)
+      .then((result) => sendResponse({ ok: true, result }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message.type === "get-exposure-suggestions") {
+    getExposureSuggestions()
+      .then((suggestions) => sendResponse({ ok: true, suggestions }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message.type === "get-sandbox-config") {
+    getSandboxConfig()
+      .then((config) => sendResponse({ ok: true, config }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message.type === "set-sandbox-config") {
+    setSandboxConfig(message.payload)
+      .then((config) => sendResponse({ ok: true, config }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message.type === "run-density-check") {
+    runDensityCheck()
+      .then((check) => sendResponse({ ok: true, check }))
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
   }
@@ -556,5 +637,186 @@ function createGovernanceProposalEntry(payload) {
     proposedChangeSummary,
     triggeringChecks,
     status
+  };
+}
+
+async function ensureReplaySnapshots() {
+  const data = await chrome.storage.local.get([REPLAY_SNAPSHOTS_KEY]);
+  if (!Array.isArray(data[REPLAY_SNAPSHOTS_KEY])) {
+    await chrome.storage.local.set({ [REPLAY_SNAPSHOTS_KEY]: [] });
+  }
+}
+
+async function getReplaySnapshots() {
+  const data = await chrome.storage.local.get([REPLAY_SNAPSHOTS_KEY]);
+  if (!Array.isArray(data[REPLAY_SNAPSHOTS_KEY])) {
+    return [];
+  }
+  return data[REPLAY_SNAPSHOTS_KEY];
+}
+
+async function createReplaySnapshot() {
+  const data = await chrome.storage.local.get(["latestWeeklyReport"]);
+  const report = data.latestWeeklyReport;
+  if (!report || !report.summary || typeof report.reflection !== "string") {
+    throw new Error("No weekly report available to snapshot.");
+  }
+
+  const snapshot = {
+    id: `replay_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    timestamp: new Date().toISOString(),
+    summary: report.summary,
+    baselineReflection: report.reflection
+  };
+
+  const snapshots = await getReplaySnapshots();
+  snapshots.push(snapshot);
+  await chrome.storage.local.set({ [REPLAY_SNAPSHOTS_KEY]: snapshots });
+  return snapshot;
+}
+
+async function runReplayDiff(snapshotId) {
+  const id = String(snapshotId || "").trim();
+  if (!id) {
+    throw new Error("snapshotId is required.");
+  }
+
+  const snapshots = await getReplaySnapshots();
+  const snapshot = snapshots.find((item) => item.id === id);
+  if (!snapshot) {
+    throw new Error("Replay snapshot not found.");
+  }
+
+  const replayReflection = await generateReflection(snapshot.summary);
+  const diff = computeTextDiff(snapshot.baselineReflection, replayReflection);
+  return {
+    snapshotId: id,
+    baselineReflection: snapshot.baselineReflection,
+    replayReflection,
+    diff
+  };
+}
+
+function computeTextDiff(baseline, replay) {
+  const baselineLines = String(baseline || "").split("\n");
+  const replayLines = String(replay || "").split("\n");
+  const max = Math.max(baselineLines.length, replayLines.length);
+  const changes = [];
+
+  for (let i = 0; i < max; i += 1) {
+    const before = baselineLines[i] || "";
+    const after = replayLines[i] || "";
+    if (before !== after) {
+      changes.push({
+        line: i + 1,
+        before,
+        after
+      });
+    }
+  }
+
+  return {
+    changedLineCount: changes.length,
+    changes: changes.slice(0, 30)
+  };
+}
+
+async function getExposureSuggestions() {
+  const data = await chrome.storage.local.get(["latestWeeklyReport"]);
+  const report = data.latestWeeklyReport;
+  if (!report || !report.summary || !Array.isArray(report.summary.topDomains)) {
+    return [];
+  }
+
+  return report.summary.topDomains.slice(0, 3).map((item) => {
+    const sourceDomain = String(item.domain || "unknown");
+    const tag = classifyDomainTag(sourceDomain);
+    const adjacent = TAG_ADJACENT_DOMAINS[tag] || TAG_ADJACENT_DOMAINS.default;
+    const suggestions = adjacent.filter((domain) => domain !== sourceDomain).slice(0, 3);
+    return {
+      sourceDomain,
+      framing: "Here are adjacent perspectives on this topic.",
+      suggestions
+    };
+  });
+}
+
+function classifyDomainTag(domain) {
+  const normalized = String(domain || "").toLowerCase();
+  for (const rule of DOMAIN_TAG_RULES) {
+    if (normalized.includes(rule.pattern)) {
+      return rule.tag;
+    }
+  }
+  return "default";
+}
+
+async function ensureSandboxConfig() {
+  const data = await chrome.storage.local.get([SANDBOX_CONFIG_KEY]);
+  const current = data[SANDBOX_CONFIG_KEY];
+  if (!current || typeof current.enabled !== "boolean" || !SANDBOX_VARIANTS.has(current.variant)) {
+    await chrome.storage.local.set({
+      [SANDBOX_CONFIG_KEY]: { enabled: false, variant: "baseline" }
+    });
+  }
+}
+
+async function getSandboxConfig() {
+  const data = await chrome.storage.local.get([SANDBOX_CONFIG_KEY]);
+  const current = data[SANDBOX_CONFIG_KEY];
+  if (!current || typeof current.enabled !== "boolean" || !SANDBOX_VARIANTS.has(current.variant)) {
+    return { enabled: false, variant: "baseline" };
+  }
+  return current;
+}
+
+async function setSandboxConfig(payload) {
+  if (!payload || typeof payload !== "object") {
+    throw new Error("Invalid sandbox config payload.");
+  }
+
+  const enabled = Boolean(payload.enabled);
+  const variant = String(payload.variant || "").trim();
+  if (!SANDBOX_VARIANTS.has(variant)) {
+    throw new Error("Invalid sandbox variant.");
+  }
+
+  const config = { enabled, variant };
+  await chrome.storage.local.set({ [SANDBOX_CONFIG_KEY]: config });
+  return config;
+}
+
+async function runDensityCheck() {
+  const data = await chrome.storage.local.get(["latestWeeklyReport", "lastPerformanceMetrics"]);
+  const report = data.latestWeeklyReport;
+  const reflectionLength = String(report?.reflection || "").length;
+  const topDomainCount = Number(report?.summary?.topDomains?.length || 0);
+  const sectionCount = 13;
+
+  const checks = [
+    {
+      name: "section_count",
+      pass: sectionCount <= 14,
+      value: sectionCount,
+      limit: "<=14"
+    },
+    {
+      name: "reflection_length",
+      pass: reflectionLength <= 2400,
+      value: reflectionLength,
+      limit: "<=2400"
+    },
+    {
+      name: "top_domain_count",
+      pass: topDomainCount <= 8,
+      value: topDomainCount,
+      limit: "<=8"
+    }
+  ];
+
+  return {
+    status: checks.every((item) => item.pass) ? "pass" : "warn",
+    checks,
+    generatedAt: new Date().toISOString()
   };
 }

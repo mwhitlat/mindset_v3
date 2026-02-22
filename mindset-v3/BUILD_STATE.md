@@ -1,6 +1,6 @@
 # BUILD STATE
 
-- Current Phase: Phase 2 (Weeks 5-6) - Governance Lite
+- Current Phase: Phase 3 (Weeks 7-8) - Replay, Exposure, Sandbox, Density
 - Phase Status: Complete (Stop condition reached)
 - Completed Tasks:
   - Created Manifest v3 extension skeleton (`manifest.json`)
@@ -29,8 +29,18 @@
   - Added popup governance controls for manual review toggle and rollback trigger (`popup.html`, `popup.js`)
   - Added compact governance diagnostics list for latest proposal entries in popup (`popup.html`, `popup.css`, `popup.js`)
   - Added Phase 2 validation runbook and script alias (`PHASE2_VALIDATION.md`, `package.json`)
+  - Created Phase 3 build envelope aligned to roadmap Weeks 7-8 (`# Mindset – Phase 3 Build Envelope.md`)
+  - Added roadmap continuity rule in Phase 3 envelope requiring next envelope creation at each phase closeout.
+  - Implemented replay-lite snapshot creation and deterministic replay diff APIs (`background.js`)
+  - Implemented exposure engine v1 deterministic adjacent perspective suggestions (`background.js`)
+  - Implemented sandbox mode config and variant controls (`background.js`, `popup.html`, `popup.js`)
+  - Implemented density check API and popup diagnostics rendering (`background.js`, `popup.html`, `popup.js`)
+  - Added replay, exposure, sandbox, and density sections to popup UI (`popup.html`, `popup.css`, `popup.js`)
+  - Added Phase 3 automated checks to smoke suite and script alias (`scripts/phase1-smoke-v3.mjs`, `package.json`)
+  - Added Phase 3 validation runbook (`PHASE3_VALIDATION.md`)
+  - Created Phase 4 build envelope aligned to roadmap Weeks 9-12 (`# Mindset – Phase 4 Build Envelope.md`)
 - Next Atomic Task:
-  - None. Phase 2 is closed.
+  - Start Phase 4 Task 1: calibrate invariant checks and add trust proxy trend diagnostics.
 - Known Issues:
   - `MINDSET_ACTIVE_CHARTER.md` currently describes Phase 6, so Phase 1 scope is anchored primarily by Build Envelope + Roadmap in this workspace.
   - Build Envelope references deterministic LLM prompting, but implementation is intentionally local-only per operator direction.

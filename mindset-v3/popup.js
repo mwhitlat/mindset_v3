@@ -9,9 +9,24 @@ const reviewRequiredCheckbox = document.getElementById("reviewRequiredCheckbox")
 const rollbackButton = document.getElementById("rollbackButton");
 const governanceStatusText = document.getElementById("governanceStatusText");
 const proposalLogList = document.getElementById("proposalLogList");
+const createReplaySnapshotButton = document.getElementById("createReplaySnapshotButton");
+const runReplayDiffButton = document.getElementById("runReplayDiffButton");
+const replayStatusText = document.getElementById("replayStatusText");
+const replayDiffBlock = document.getElementById("replayDiffBlock");
+const exposureBlock = document.getElementById("exposureBlock");
+const sandboxEnabledCheckbox = document.getElementById("sandboxEnabledCheckbox");
+const sandboxVariantSelect = document.getElementById("sandboxVariantSelect");
+const sandboxStatusText = document.getElementById("sandboxStatusText");
+const runDensityCheckButton = document.getElementById("runDensityCheckButton");
+const densityBlock = document.getElementById("densityBlock");
+const governanceSection = document.getElementById("governanceSection");
+const replaySection = document.getElementById("replaySection");
+const exposureSection = document.getElementById("exposureSection");
 const recordNegativeFeedbackButton = document.getElementById("recordNegativeFeedbackButton");
 const recordSectionDisablementButton = document.getElementById("recordSectionDisablementButton");
 const uninstallProxyFlagCheckbox = document.getElementById("uninstallProxyFlagCheckbox");
+let latestReplaySnapshotId = "";
+let currentSandboxState = { enabled: false, variant: "baseline" };
 
 generateReportButton.addEventListener("click", async () => {
   generateReportButton.disabled = true;
@@ -79,19 +94,80 @@ rollbackButton.addEventListener("click", async () => {
   }
 });
 
+createReplaySnapshotButton.addEventListener("click", async () => {
+  createReplaySnapshotButton.disabled = true;
+  try {
+    const snapshot = await sendRuntimeMessage({ type: "create-replay-snapshot" });
+    latestReplaySnapshotId = snapshot.id;
+    setReplayStatus(`Replay snapshot created at ${new Date(snapshot.timestamp).toLocaleString()}.`);
+    await loadReplaySnapshots();
+  } catch (error) {
+    setReplayStatus(`Replay snapshot failed: ${error.message}`);
+  } finally {
+    createReplaySnapshotButton.disabled = false;
+  }
+});
+
+runReplayDiffButton.addEventListener("click", async () => {
+  runReplayDiffButton.disabled = true;
+  try {
+    if (!latestReplaySnapshotId) {
+      throw new Error("No replay snapshot available.");
+    }
+    const result = await sendRuntimeMessage({
+      type: "run-replay-diff",
+      payload: { snapshotId: latestReplaySnapshotId }
+    });
+    renderReplayDiff(result);
+    setReplayStatus(`Replay diff generated. Changed lines: ${result.diff.changedLineCount}.`);
+  } catch (error) {
+    setReplayStatus(`Replay diff failed: ${error.message}`);
+  } finally {
+    runReplayDiffButton.disabled = false;
+  }
+});
+
+sandboxEnabledCheckbox.addEventListener("change", async () => {
+  await persistSandboxConfig();
+});
+
+sandboxVariantSelect.addEventListener("change", async () => {
+  await persistSandboxConfig();
+});
+
+runDensityCheckButton.addEventListener("click", async () => {
+  runDensityCheckButton.disabled = true;
+  try {
+    const check = await sendRuntimeMessage({ type: "run-density-check" });
+    renderDensityCheck(check);
+  } catch (error) {
+    densityBlock.textContent = "";
+    const line = document.createElement("p");
+    line.className = "label";
+    line.textContent = `Density check failed: ${error.message}`;
+    densityBlock.appendChild(line);
+  } finally {
+    runDensityCheckButton.disabled = false;
+  }
+});
+
 loadLatestReport();
 
 async function loadLatestReport() {
   const data = await chrome.storage.local.get(["latestWeeklyReport", "lastPerformanceMetrics"]);
   await loadGovernanceConfig();
   await loadGovernanceProposals();
+  await loadReplaySnapshots();
+  await loadSandboxConfig();
   await loadTrustProxies();
   renderPerformance(data.lastPerformanceMetrics || null);
   if (!data.latestWeeklyReport) {
+    await loadExposureSuggestions();
     return;
   }
   renderReport(data.latestWeeklyReport);
   await incrementTrustProxy("reportReopenCount");
+  await loadExposureSuggestions();
   const memoryEstimate = data.latestWeeklyReport.performance?.memoryEstimateBytes ?? "n/a";
   setStatus(
     `Loaded report from ${new Date(data.latestWeeklyReport.generatedAt).toLocaleString()} | Estimated memory: ${memoryEstimate} bytes.`
@@ -183,6 +259,171 @@ function setGovernanceStatus(message) {
   governanceStatusText.textContent = message;
 }
 
+async function loadReplaySnapshots() {
+  try {
+    const snapshots = await sendRuntimeMessage({ type: "get-replay-snapshots" });
+    if (Array.isArray(snapshots) && snapshots.length > 0) {
+      latestReplaySnapshotId = snapshots[snapshots.length - 1].id;
+      setReplayStatus(`Latest snapshot: ${new Date(snapshots[snapshots.length - 1].timestamp).toLocaleString()}.`);
+    } else {
+      latestReplaySnapshotId = "";
+      setReplayStatus("Replay tools ready.");
+      replayDiffBlock.textContent = "";
+      const line = document.createElement("p");
+      line.className = "label";
+      line.textContent = "No replay diff available yet.";
+      replayDiffBlock.appendChild(line);
+    }
+  } catch (error) {
+    setReplayStatus(`Replay load failed: ${error.message}`);
+  }
+}
+
+function setReplayStatus(message) {
+  replayStatusText.textContent = message;
+}
+
+function renderReplayDiff(result) {
+  replayDiffBlock.textContent = "";
+  const summary = document.createElement("p");
+  summary.className = "label";
+  summary.textContent = `Changed lines: ${result.diff.changedLineCount}`;
+  replayDiffBlock.appendChild(summary);
+
+  if (!Array.isArray(result.diff.changes) || result.diff.changes.length === 0) {
+    const row = document.createElement("p");
+    row.className = "label";
+    row.textContent = "No textual differences detected.";
+    replayDiffBlock.appendChild(row);
+    return;
+  }
+
+  for (const change of result.diff.changes.slice(0, getDensityItemLimit(5))) {
+    const item = document.createElement("div");
+    item.className = "log-item";
+
+    const line = document.createElement("p");
+    line.className = "label";
+    line.textContent = `Line ${change.line}`;
+
+    const before = document.createElement("p");
+    before.className = "label";
+    before.textContent = `Before: ${change.before || "(empty)"}`;
+
+    const after = document.createElement("p");
+    after.className = "label";
+    after.textContent = `After: ${change.after || "(empty)"}`;
+
+    item.append(line, before, after);
+    replayDiffBlock.appendChild(item);
+  }
+}
+
+async function loadExposureSuggestions() {
+  try {
+    const suggestions = await sendRuntimeMessage({ type: "get-exposure-suggestions" });
+    renderExposureSuggestions(suggestions);
+  } catch (error) {
+    exposureBlock.textContent = "";
+    const row = document.createElement("p");
+    row.className = "label";
+    row.textContent = `Exposure load failed: ${error.message}`;
+    exposureBlock.appendChild(row);
+  }
+}
+
+function renderExposureSuggestions(items) {
+  exposureBlock.textContent = "";
+  if (!Array.isArray(items) || items.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "label";
+    empty.textContent = "Generate a report to view adjacent perspective options.";
+    exposureBlock.appendChild(empty);
+    return;
+  }
+
+  for (const item of items.slice(0, getDensityItemLimit(3))) {
+    const row = document.createElement("div");
+    row.className = "log-item";
+
+    const source = document.createElement("p");
+    source.className = "summary-value";
+    source.textContent = item.sourceDomain;
+
+    const framing = document.createElement("p");
+    framing.className = "label";
+    framing.textContent = item.framing;
+
+    const suggestions = document.createElement("p");
+    suggestions.className = "label";
+    suggestions.textContent = item.suggestions.join(", ");
+
+    row.append(source, framing, suggestions);
+    exposureBlock.appendChild(row);
+  }
+}
+
+async function loadSandboxConfig() {
+  try {
+    const config = await sendRuntimeMessage({ type: "get-sandbox-config" });
+    sandboxEnabledCheckbox.checked = Boolean(config.enabled);
+    sandboxVariantSelect.value = String(config.variant || "baseline");
+    currentSandboxState = config;
+    applySandboxVariant(config);
+    sandboxStatusText.textContent = "Sandbox controls ready.";
+  } catch (error) {
+    sandboxStatusText.textContent = `Sandbox load failed: ${error.message}`;
+  }
+}
+
+async function persistSandboxConfig() {
+  try {
+    const config = await sendRuntimeMessage({
+      type: "set-sandbox-config",
+      payload: {
+        enabled: Boolean(sandboxEnabledCheckbox.checked),
+        variant: sandboxVariantSelect.value
+      }
+    });
+    sandboxEnabledCheckbox.checked = Boolean(config.enabled);
+    sandboxVariantSelect.value = String(config.variant);
+    currentSandboxState = config;
+    applySandboxVariant(config);
+    await refreshSandboxDependentViews();
+    sandboxStatusText.textContent = `Sandbox updated: ${config.enabled ? "enabled" : "disabled"} (${config.variant}).`;
+  } catch (error) {
+    sandboxStatusText.textContent = `Sandbox update failed: ${error.message}`;
+  }
+}
+
+function renderDensityCheck(check) {
+  densityBlock.textContent = "";
+  const summary = document.createElement("p");
+  summary.className = "label";
+  summary.textContent = `Status: ${String(check.status).toUpperCase()}`;
+  densityBlock.appendChild(summary);
+
+  for (const item of check.checks || []) {
+    const row = document.createElement("div");
+    row.className = "log-item";
+
+    const name = document.createElement("p");
+    name.className = "summary-value";
+    name.textContent = item.name;
+
+    const value = document.createElement("p");
+    value.className = "label";
+    value.textContent = `Value: ${item.value} | Limit: ${item.limit}`;
+
+    const pass = document.createElement("p");
+    pass.className = "label";
+    pass.textContent = `Pass: ${item.pass ? "yes" : "no"}`;
+
+    row.append(name, value, pass);
+    densityBlock.appendChild(row);
+  }
+}
+
 async function loadGovernanceProposals() {
   try {
     const entries = await sendRuntimeMessage({ type: "get-governance-proposals" });
@@ -206,7 +447,7 @@ function renderGovernanceProposals(entries) {
     return;
   }
 
-  const recentEntries = entries.slice(-5).reverse();
+  const recentEntries = entries.slice(-5).reverse().slice(0, getDensityItemLimit(5));
   for (const entry of recentEntries) {
     const row = document.createElement("div");
     row.className = "log-item";
@@ -348,6 +589,51 @@ function formatMetric(value) {
   return String(Math.max(0, Math.round(value)));
 }
 
+function getDensityItemLimit(defaultCount) {
+  if (!currentSandboxState.enabled) {
+    return defaultCount;
+  }
+  if (currentSandboxState.variant === "compact") {
+    return Math.max(1, defaultCount - 2);
+  }
+  return defaultCount;
+}
+
+function applySandboxVariant(config) {
+  resetSectionOrder();
+  document.body.classList.toggle("sandbox-compact", Boolean(config.enabled && config.variant === "compact"));
+  if (!config.enabled) {
+    return;
+  }
+
+  const app = document.querySelector(".app");
+  if (!app) {
+    return;
+  }
+
+  if (config.variant === "replay_focus") {
+    app.insertBefore(replaySection, governanceSection);
+  } else if (config.variant === "exposure_focus") {
+    app.insertBefore(exposureSection, governanceSection);
+  }
+}
+
+function resetSectionOrder() {
+  const app = document.querySelector(".app");
+  const performanceSection = performanceBlock.closest(".section");
+  if (!app || !performanceSection) {
+    return;
+  }
+
+  app.insertBefore(governanceSection, performanceSection.nextElementSibling);
+  app.insertBefore(replaySection, governanceSection.nextElementSibling);
+  app.insertBefore(exposureSection, replaySection.nextElementSibling);
+}
+
+async function refreshSandboxDependentViews() {
+  await Promise.all([loadGovernanceProposals(), loadExposureSuggestions()]);
+}
+
 function sendRuntimeMessage(message) {
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage(message, (response) => {
@@ -377,6 +663,22 @@ function sendRuntimeMessage(message) {
       }
       if ("snapshot" in response || "rollbackEntry" in response) {
         resolve(response);
+        return;
+      }
+      if ("snapshots" in response) {
+        resolve(response.snapshots);
+        return;
+      }
+      if ("suggestions" in response) {
+        resolve(response.suggestions);
+        return;
+      }
+      if ("result" in response) {
+        resolve(response.result);
+        return;
+      }
+      if ("check" in response) {
+        resolve(response.check);
         return;
       }
       resolve(response);

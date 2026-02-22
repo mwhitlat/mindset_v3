@@ -403,6 +403,120 @@ try {
 
     assert(flagged.uninstallProxyFlag === true, "Uninstall proxy flag did not set to true.");
   });
+
+  await runCheck("Creates replay snapshot and runs deterministic replay diff", async () => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`, { waitUntil: "domcontentloaded" });
+
+    const snapshot = await page.evaluate(async () => {
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: "create-replay-snapshot" }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          if (!response || !response.ok) {
+            reject(new Error(response?.error || "create-replay-snapshot failed"));
+            return;
+          }
+          resolve(response.snapshot);
+        });
+      });
+    });
+
+    assert(snapshot && typeof snapshot.id === "string", "Replay snapshot id missing.");
+
+    const replayResult = await page.evaluate(async (snapshotId) => {
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: "run-replay-diff", payload: { snapshotId } }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          if (!response || !response.ok) {
+            reject(new Error(response?.error || "run-replay-diff failed"));
+            return;
+          }
+          resolve(response.result);
+        });
+      });
+    }, snapshot.id);
+
+    assert(
+      typeof replayResult?.diff?.changedLineCount === "number",
+      "Replay diff did not return changedLineCount."
+    );
+  });
+
+  await runCheck("Returns exposure suggestions and sandbox config updates", async () => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`, { waitUntil: "domcontentloaded" });
+
+    const suggestions = await page.evaluate(async () => {
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: "get-exposure-suggestions" }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          if (!response || !response.ok) {
+            reject(new Error(response?.error || "get-exposure-suggestions failed"));
+            return;
+          }
+          resolve(response.suggestions);
+        });
+      });
+    });
+
+    assert(Array.isArray(suggestions), "Exposure suggestions response is not an array.");
+    assert(suggestions.length > 0, "Exposure suggestions were empty.");
+
+    const sandboxConfig = await page.evaluate(async () => {
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          { type: "set-sandbox-config", payload: { enabled: true, variant: "replay_focus" } },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+              return;
+            }
+            if (!response || !response.ok) {
+              reject(new Error(response?.error || "set-sandbox-config failed"));
+              return;
+            }
+            resolve(response.config);
+          }
+        );
+      });
+    });
+
+    assert(sandboxConfig.enabled === true, "Sandbox config did not enable.");
+    assert(sandboxConfig.variant === "replay_focus", "Sandbox variant did not persist.");
+  });
+
+  await runCheck("Runs density checks", async () => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`, { waitUntil: "domcontentloaded" });
+
+    const check = await page.evaluate(async () => {
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: "run-density-check" }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          if (!response || !response.ok) {
+            reject(new Error(response?.error || "run-density-check failed"));
+            return;
+          }
+          resolve(response.check);
+        });
+      });
+    });
+
+    assert(check && Array.isArray(check.checks), "Density check payload missing checks.");
+    assert(check.checks.length >= 3, "Density check did not include expected checks.");
+  });
 } finally {
   await context.close();
 }

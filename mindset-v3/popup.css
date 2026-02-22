@@ -79,6 +79,15 @@ body {
   cursor: default;
 }
 
+.select {
+  border: 1px solid var(--divider);
+  padding: var(--space-8);
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--text-primary);
+  background: var(--bg);
+}
+
 .actions-row {
   display: grid;
   grid-template-columns: 1fr;
@@ -167,4 +176,16 @@ body {
   font-size: 15px;
   line-height: 1.4;
   color: var(--text-primary);
+}
+
+body.sandbox-compact .app {
+  gap: var(--space-16);
+}
+
+body.sandbox-compact .section {
+  padding: var(--space-8);
+}
+
+body.sandbox-compact .summary-grid {
+  grid-template-columns: 1fr;
 }
