@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mindset</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="app">
+      <header class="section">
+        <h1 class="display">Weekly Reflection</h1>
+        <p class="secondary">A descriptive summary of your browsing distribution for the last 7 days.</p>
+        <p class="label">Reflection is generated locally from weekly aggregate activity.</p>
+      </header>
+
+      <section class="section">
+        <button id="generateReportButton" class="button" type="button">Generate Report</button>
+        <p id="statusText" class="label">Ready.</p>
+      </section>
+
+      <section class="section">
+        <h2 class="body">Domain Distribution</h2>
+        <div id="domainChart" class="chart"></div>
+      </section>
+
+      <section class="section">
+        <h2 class="body">Summary</h2>
+        <div id="summaryBlock" class="summary-grid">
+          <p class="label">No report generated yet.</p>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="body">Performance</h2>
+        <div id="performanceBlock" class="summary-grid">
+          <p class="label">No performance data available yet.</p>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="body">Reflection</h2>
+        <pre id="reflectionText" class="text-block">No report generated yet.</pre>
+      </section>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
