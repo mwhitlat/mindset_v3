@@ -127,6 +127,94 @@ try {
     assert(entries.some((item) => item.id === entry.id), "Appended proposal was not found in proposal log.");
   });
 
+  await runCheck("Creates and transitions proposals from popup UI controls", async () => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`, { waitUntil: "domcontentloaded" });
+
+    await page.fill("#proposalSummaryInput", "UI proposal create test");
+    await page.click("#createProposalButton");
+    await page.waitForTimeout(300);
+
+    const created = await page.evaluate(async () => {
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: "get-governance-proposals" }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          if (!response || !response.ok) {
+            reject(new Error(response?.error || "get-governance-proposals failed"));
+            return;
+          }
+          const latest = response.entries[response.entries.length - 1];
+          resolve(latest);
+        });
+      });
+    });
+
+    assert(created && created.proposedChangeSummary === "UI proposal create test", "UI proposal was not created.");
+    assert(created.status === "pending", "UI-created proposal is not pending.");
+
+    await page
+      .locator(".log-item", { hasText: "UI proposal create test" })
+      .locator("button:has-text('Approve')")
+      .first()
+      .click();
+    await page.waitForTimeout(300);
+
+    const approved = await page.evaluate(async () => {
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: "get-governance-proposals" }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          if (!response || !response.ok) {
+            reject(new Error(response?.error || "get-governance-proposals failed"));
+            return;
+          }
+          const matched = [...response.entries]
+            .reverse()
+            .find((entry) => entry.proposedChangeSummary === "UI proposal create test");
+          resolve(matched);
+        });
+      });
+    });
+
+    assert(approved && approved.status === "approved", "UI approve action failed.");
+
+    await page.fill("#proposalSummaryInput", "UI proposal reject test");
+    await page.click("#createProposalButton");
+    await page.waitForTimeout(300);
+    await page
+      .locator(".log-item", { hasText: "UI proposal reject test" })
+      .locator("button:has-text('Reject')")
+      .first()
+      .click();
+    await page.waitForTimeout(300);
+
+    const rejected = await page.evaluate(async () => {
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: "get-governance-proposals" }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          if (!response || !response.ok) {
+            reject(new Error(response?.error || "get-governance-proposals failed"));
+            return;
+          }
+          const matched = [...response.entries]
+            .reverse()
+            .find((entry) => entry.proposedChangeSummary === "UI proposal reject test");
+          resolve(matched);
+        });
+      });
+    });
+
+    assert(rejected && rejected.status === "rejected", "UI reject action failed.");
+  });
+
   await runCheck("Enforces manual review toggle behavior", async () => {
     const page = await context.newPage();
     await page.goto(`chrome-extension://${extensionId}/popup.html`, { waitUntil: "domcontentloaded" });

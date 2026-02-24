@@ -1,6 +1,6 @@
 # BUILD STATE
 
-- Current Phase: Phase 4 (Weeks 9-12) - Calibration and Stabilization
+- Current Phase: Maturity Phase 1 - User-Facing Governance Lifecycle
 - Phase Status: Complete (Stop condition reached)
 - Completed Tasks:
   - Created Manifest v3 extension skeleton (`manifest.json`)
@@ -44,8 +44,14 @@
   - Tightened exposure symmetry normalization and deterministic ordering (`background.js`)
   - Stabilized sandbox compact density behavior with explicit layout changes (`popup.css`, `popup.js`)
   - Added Phase 4 automated checks, script alias, and validation runbook (`scripts/phase1-smoke-v3.mjs`, `package.json`, `PHASE4_VALIDATION.md`)
+  - Drafted long-charter maturity plan with 2-4 week fast-track and 6-10 week maturity-track options (`LONG_CHARTER_MATURITY_PLAN.md`)
+  - Created Maturity Phase 1 build envelope for user-facing proposal lifecycle (`# Mindset – Maturity Phase 1 Build Envelope.md`)
+  - Added popup user-facing proposal creation input/button (no DevTools dependency) (`popup.html`, `popup.js`)
+  - Added popup approve/reject actions for pending proposals in lifecycle list (`popup.js`)
+  - Added automated UI-flow validation for create/approve/reject proposal lifecycle (`scripts/phase1-smoke-v3.mjs`)
+  - Added Maturity Phase 1 validation runbook (`MATURITY_PHASE1_VALIDATION.md`)
 - Next Atomic Task:
-  - None. Roadmap build phases complete; scope frozen to bug-fix/reliability/docs only.
+  - None. Maturity Phase 1 is closed.
 - Known Issues:
   - `MINDSET_ACTIVE_CHARTER.md` currently describes Phase 6, so Phase 1 scope is anchored primarily by Build Envelope + Roadmap in this workspace.
   - Build Envelope references deterministic LLM prompting, but implementation is intentionally local-only per operator direction.

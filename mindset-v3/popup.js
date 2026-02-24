@@ -6,6 +6,8 @@ const performanceBlock = document.getElementById("performanceBlock");
 const trustProxyBlock = document.getElementById("trustProxyBlock");
 const generateReportButton = document.getElementById("generateReportButton");
 const reviewRequiredCheckbox = document.getElementById("reviewRequiredCheckbox");
+const proposalSummaryInput = document.getElementById("proposalSummaryInput");
+const createProposalButton = document.getElementById("createProposalButton");
 const rollbackButton = document.getElementById("rollbackButton");
 const governanceStatusText = document.getElementById("governanceStatusText");
 const proposalLogList = document.getElementById("proposalLogList");
@@ -80,6 +82,30 @@ reviewRequiredCheckbox.addEventListener("change", async () => {
   } catch (error) {
     reviewRequiredCheckbox.checked = !reviewRequiredCheckbox.checked;
     setGovernanceStatus(`Governance update failed: ${error.message}`);
+  }
+});
+
+createProposalButton.addEventListener("click", async () => {
+  createProposalButton.disabled = true;
+  try {
+    const summary = String(proposalSummaryInput.value || "").trim();
+    if (!summary) {
+      throw new Error("Proposal summary is required.");
+    }
+    await sendRuntimeMessage({
+      type: "append-governance-proposal",
+      payload: {
+        proposedChangeSummary: summary,
+        triggeringChecks: ["manual-create"]
+      }
+    });
+    proposalSummaryInput.value = "";
+    await loadGovernanceProposals();
+    setGovernanceStatus("Proposal created.");
+  } catch (error) {
+    setGovernanceStatus(`Proposal create failed: ${error.message}`);
+  } finally {
+    createProposalButton.disabled = false;
   }
 });
 
@@ -569,7 +595,45 @@ function renderGovernanceProposals(entries) {
     time.textContent = `At: ${timeText}`;
 
     row.append(summary, status, time);
+
+    if (entry.status === "pending") {
+      const actions = document.createElement("div");
+      actions.className = "actions-row";
+
+      const approveButton = document.createElement("button");
+      approveButton.className = "button";
+      approveButton.type = "button";
+      approveButton.textContent = "Approve";
+      approveButton.addEventListener("click", async () => {
+        await applyProposalStatus(entry.id, "approved");
+      });
+
+      const rejectButton = document.createElement("button");
+      rejectButton.className = "button";
+      rejectButton.type = "button";
+      rejectButton.textContent = "Reject";
+      rejectButton.addEventListener("click", async () => {
+        await applyProposalStatus(entry.id, "rejected");
+      });
+
+      actions.append(approveButton, rejectButton);
+      row.appendChild(actions);
+    }
+
     proposalLogList.appendChild(row);
+  }
+}
+
+async function applyProposalStatus(proposalId, status) {
+  try {
+    await sendRuntimeMessage({
+      type: "apply-governance-proposal-status",
+      payload: { proposalId, status }
+    });
+    await loadGovernanceProposals();
+    setGovernanceStatus(`Proposal ${status}.`);
+  } catch (error) {
+    setGovernanceStatus(`Proposal update failed: ${error.message}`);
   }
 }
 
