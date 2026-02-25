@@ -24,6 +24,11 @@ const runDensityCheckButton = document.getElementById("runDensityCheckButton");
 const densityBlock = document.getElementById("densityBlock");
 const runInvariantCheckButton = document.getElementById("runInvariantCheckButton");
 const refreshTrustTrendButton = document.getElementById("refreshTrustTrendButton");
+const saveTrustThresholdsButton = document.getElementById("saveTrustThresholdsButton");
+const negativeFeedbackThresholdInput = document.getElementById("negativeFeedbackThresholdInput");
+const sectionDisablementThresholdInput = document.getElementById("sectionDisablementThresholdInput");
+const reportReopenThresholdInput = document.getElementById("reportReopenThresholdInput");
+const uninstallProxyWarnCheckbox = document.getElementById("uninstallProxyWarnCheckbox");
 const invariantBlock = document.getElementById("invariantBlock");
 const trustTrendBlock = document.getElementById("trustTrendBlock");
 const governanceSection = document.getElementById("governanceSection");
@@ -203,6 +208,28 @@ refreshTrustTrendButton.addEventListener("click", async () => {
   await loadTrustTrend();
 });
 
+saveTrustThresholdsButton.addEventListener("click", async () => {
+  saveTrustThresholdsButton.disabled = true;
+  try {
+    const thresholds = await sendRuntimeMessage({
+      type: "set-trust-thresholds",
+      payload: {
+        negativeFeedbackThreshold: Number(negativeFeedbackThresholdInput.value),
+        sectionDisablementThreshold: Number(sectionDisablementThresholdInput.value),
+        reportReopenThreshold: Number(reportReopenThresholdInput.value),
+        uninstallProxyWarn: Boolean(uninstallProxyWarnCheckbox.checked)
+      }
+    });
+    renderTrustThresholds(thresholds);
+    await loadTrustTrend();
+    setStatus("Trust thresholds saved.");
+  } catch (error) {
+    setStatus(`Saving thresholds failed: ${error.message}`);
+  } finally {
+    saveTrustThresholdsButton.disabled = false;
+  }
+});
+
 loadLatestReport();
 
 async function loadLatestReport() {
@@ -213,6 +240,7 @@ async function loadLatestReport() {
   await loadReplaySnapshots();
   await loadSandboxConfig();
   await loadTrustProxies();
+  await loadTrustThresholds();
   await loadTrustTrend();
   renderPerformance(data.lastPerformanceMetrics || null);
   if (!data.latestWeeklyReport) {
@@ -527,6 +555,14 @@ function renderTrustTrend(trend) {
   warningHeader.textContent = warnings.length === 0 ? "No trust warnings." : `Warnings: ${warnings.length}`;
   trustTrendBlock.appendChild(warningHeader);
 
+  if (trend.thresholds) {
+    const thresholdLine = document.createElement("p");
+    thresholdLine.className = "label";
+    thresholdLine.textContent =
+      `Thresholds: feedback>=${trend.thresholds.negativeFeedbackThreshold}, disable>=${trend.thresholds.sectionDisablementThreshold}, reopen>=${trend.thresholds.reportReopenThreshold}, uninstallWarn=${trend.thresholds.uninstallProxyWarn ? "on" : "off"}`;
+    trustTrendBlock.appendChild(thresholdLine);
+  }
+
   for (const warning of warnings) {
     const row = document.createElement("div");
     row.className = "log-item";
@@ -554,6 +590,49 @@ function renderTrustTrend(trend) {
     `Latest: feedback=${latest.negativeFeedbackCount}, disable=${latest.sectionDisablementCount}, reopen=${latest.reportReopenCount}, uninstall=${latest.uninstallProxyFlag ? "yes" : "no"}`;
   latestRow.appendChild(latestText);
   trustTrendBlock.appendChild(latestRow);
+
+  if (trend.windows?.last5 || trend.windows?.last10) {
+    const windowsRow = document.createElement("div");
+    windowsRow.className = "log-item";
+    const w5 = trend.windows?.last5 || {};
+    const w10 = trend.windows?.last10 || {};
+    const line = document.createElement("p");
+    line.className = "label";
+    line.textContent =
+      `Windows: last5(n=${w5.sampleSize || 0}, maxF=${w5.maxNegativeFeedback || 0}, maxD=${w5.maxSectionDisablement || 0}, maxR=${w5.maxReportReopen || 0}) | last10(n=${w10.sampleSize || 0}, maxF=${w10.maxNegativeFeedback || 0}, maxD=${w10.maxSectionDisablement || 0}, maxR=${w10.maxReportReopen || 0})`;
+    windowsRow.appendChild(line);
+    trustTrendBlock.appendChild(windowsRow);
+  }
+
+  if (trend.directions) {
+    const directionRow = document.createElement("div");
+    directionRow.className = "log-item";
+    const line = document.createElement("p");
+    line.className = "label";
+    line.textContent =
+      `Directions: feedback=${trend.directions.negativeFeedback}, disable=${trend.directions.sectionDisablement}, reopen=${trend.directions.reportReopen}`;
+    directionRow.appendChild(line);
+    trustTrendBlock.appendChild(directionRow);
+  }
+}
+
+async function loadTrustThresholds() {
+  try {
+    const thresholds = await sendRuntimeMessage({ type: "get-trust-thresholds" });
+    renderTrustThresholds(thresholds);
+  } catch (error) {
+    setStatus(`Trust threshold load failed: ${error.message}`);
+  }
+}
+
+function renderTrustThresholds(thresholds) {
+  if (!thresholds) {
+    return;
+  }
+  negativeFeedbackThresholdInput.value = String(thresholds.negativeFeedbackThreshold ?? 3);
+  sectionDisablementThresholdInput.value = String(thresholds.sectionDisablementThreshold ?? 3);
+  reportReopenThresholdInput.value = String(thresholds.reportReopenThreshold ?? 5);
+  uninstallProxyWarnCheckbox.checked = Boolean(thresholds.uninstallProxyWarn);
 }
 
 async function loadGovernanceProposals() {
@@ -879,6 +958,10 @@ function sendRuntimeMessage(message) {
       }
       if ("trend" in response) {
         resolve(response.trend);
+        return;
+      }
+      if ("thresholds" in response) {
+        resolve(response.thresholds);
         return;
       }
       if ("status" in response) {

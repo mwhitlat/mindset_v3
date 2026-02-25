@@ -709,6 +709,62 @@ try {
     assert(Array.isArray(trend.recent), "Trust trend recent data missing.");
     assert(Array.isArray(trend.warnings), "Trust trend warnings missing.");
   });
+
+  await runCheck("Persists trust thresholds and returns trend windows/directions", async () => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`, { waitUntil: "domcontentloaded" });
+
+    const thresholds = await page.evaluate(async () => {
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          {
+            type: "set-trust-thresholds",
+            payload: {
+              negativeFeedbackThreshold: 2,
+              sectionDisablementThreshold: 2,
+              reportReopenThreshold: 3,
+              uninstallProxyWarn: true
+            }
+          },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+              return;
+            }
+            if (!response || !response.ok) {
+              reject(new Error(response?.error || "set-trust-thresholds failed"));
+              return;
+            }
+            resolve(response.thresholds);
+          }
+        );
+      });
+    });
+
+    assert(thresholds.negativeFeedbackThreshold === 2, "negativeFeedbackThreshold did not persist.");
+    assert(thresholds.sectionDisablementThreshold === 2, "sectionDisablementThreshold did not persist.");
+    assert(thresholds.reportReopenThreshold === 3, "reportReopenThreshold did not persist.");
+
+    const trend = await page.evaluate(async () => {
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: "get-trust-trend" }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          if (!response || !response.ok) {
+            reject(new Error(response?.error || "get-trust-trend failed"));
+            return;
+          }
+          resolve(response.trend);
+        });
+      });
+    });
+
+    assert(typeof trend.windows?.last5?.sampleSize === "number", "Trend window last5 missing.");
+    assert(typeof trend.windows?.last10?.sampleSize === "number", "Trend window last10 missing.");
+    assert(typeof trend.directions?.negativeFeedback === "string", "Trend directions missing.");
+  });
 } finally {
   await context.close();
 }

@@ -1,6 +1,6 @@
 # BUILD STATE
 
-- Current Phase: Maturity Phase 2 - Structured Review and Rollback Clarity
+- Current Phase: Maturity Phase 3 - Trust Thresholds and Trend Diagnostics
 - Phase Status: Complete (Stop condition reached)
 - Completed Tasks:
   - Created Manifest v3 extension skeleton (`manifest.json`)
@@ -60,8 +60,16 @@
   - Added Maturity Phase 2 validation runbook (`MATURITY_PHASE2_VALIDATION.md`)
   - Closed Maturity Phase 2 with DoD verification (`MATURITY_PHASE2_DONE.md`)
   - Created Maturity Phase 3 build envelope aligned to Week 3 of maturity plan (`# Mindset – Maturity Phase 3 Build Envelope.md`)
+  - Added trust-threshold configuration storage/get/set APIs (`background.js`)
+  - Added trend-window summaries and direction indicators in trust trend responses (`background.js`)
+  - Added trust trend signal-quality hardening (sanitize/order/dedupe) (`background.js`)
+  - Added calibration UI controls for trust thresholds (`popup.html`, `popup.js`)
+  - Added automated checks for threshold persistence and trend window payloads (`scripts/phase1-smoke-v3.mjs`)
+  - Added Maturity Phase 3 validation runbook (`MATURITY_PHASE3_VALIDATION.md`)
+  - Closed Maturity Phase 3 with DoD verification (`MATURITY_PHASE3_DONE.md`)
+  - Created Maturity Phase 4 build envelope with charter mapping and completion estimate (`# Mindset – Maturity Phase 4 Build Envelope.md`)
 - Next Atomic Task:
-  - Start Maturity Phase 3 Task 1: implement trust threshold configuration and trend-window diagnostics.
+  - Start Maturity Phase 4 Task 1: tune invariant checks and add calibration decision log with expanded tests.
 - Known Issues:
   - `MINDSET_ACTIVE_CHARTER.md` currently describes Phase 6, so Phase 1 scope is anchored primarily by Build Envelope + Roadmap in this workspace.
   - Build Envelope references deterministic LLM prompting, but implementation is intentionally local-only per operator direction.

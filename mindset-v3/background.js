@@ -7,6 +7,7 @@ const GOVERNANCE_CONFIG_KEY = "governanceConfig";
 const STABLE_SNAPSHOT_KEY = "governanceStableSnapshot";
 const TRUST_PROXIES_KEY = "trustProxyMetrics";
 const TRUST_TREND_KEY = "trustProxyTrend";
+const TRUST_THRESHOLDS_KEY = "trustThresholdConfig";
 const REPLAY_SNAPSHOTS_KEY = "replaySnapshots";
 const SANDBOX_CONFIG_KEY = "sandboxConfig";
 const PROPOSAL_STATUS_VALUES = new Set(["pending", "approved", "rejected", "rolled_back"]);
@@ -35,6 +36,12 @@ const TAG_ADJACENT_DOMAINS = {
   default: ["wikipedia.org", "reuters.com", "bbc.com"]
 };
 const REFLECTION_PROHIBITED_PHRASES = ["you should", "to improve", "must", "need to", "should avoid"];
+const DEFAULT_TRUST_THRESHOLDS = {
+  negativeFeedbackThreshold: 3,
+  sectionDisablementThreshold: 3,
+  reportReopenThreshold: 5,
+  uninstallProxyWarn: true
+};
 
 const serviceWorkerStartMs = Date.now();
 
@@ -46,7 +53,8 @@ chrome.runtime.onInstalled.addListener(() => {
     ensureTrustProxies(),
     ensureReplaySnapshots(),
     ensureSandboxConfig(),
-    ensureTrustTrend()
+    ensureTrustTrend(),
+    ensureTrustThresholds()
   ])
     .catch((error) => {
       console.error("Mindset initialization failed:", error);
@@ -206,6 +214,20 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "get-trust-trend") {
     getTrustTrend()
       .then((trend) => sendResponse({ ok: true, trend }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message.type === "get-trust-thresholds") {
+    getTrustThresholds()
+      .then((thresholds) => sendResponse({ ok: true, thresholds }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message.type === "set-trust-thresholds") {
+    setTrustThresholds(message.payload)
+      .then((thresholds) => sendResponse({ ok: true, thresholds }))
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
   }
@@ -973,43 +995,199 @@ async function ensureTrustTrend() {
   }
 }
 
-async function getTrustTrend() {
-  const data = await chrome.storage.local.get([TRUST_TREND_KEY]);
-  if (!Array.isArray(data[TRUST_TREND_KEY])) {
-    return { recent: [], warnings: [] };
+async function ensureTrustThresholds() {
+  const data = await chrome.storage.local.get([TRUST_THRESHOLDS_KEY]);
+  const current = data[TRUST_THRESHOLDS_KEY];
+  if (!isValidTrustThresholds(current)) {
+    await chrome.storage.local.set({ [TRUST_THRESHOLDS_KEY]: DEFAULT_TRUST_THRESHOLDS });
+  }
+}
+
+async function getTrustThresholds() {
+  const data = await chrome.storage.local.get([TRUST_THRESHOLDS_KEY]);
+  const current = data[TRUST_THRESHOLDS_KEY];
+  if (!isValidTrustThresholds(current)) {
+    return { ...DEFAULT_TRUST_THRESHOLDS };
+  }
+  return current;
+}
+
+async function setTrustThresholds(payload) {
+  if (!payload || typeof payload !== "object") {
+    throw new Error("Invalid trust threshold payload.");
   }
 
-  const recent = data[TRUST_TREND_KEY].slice(-10);
+  const parsed = {
+    negativeFeedbackThreshold: toPositiveInt(payload.negativeFeedbackThreshold),
+    sectionDisablementThreshold: toPositiveInt(payload.sectionDisablementThreshold),
+    reportReopenThreshold: toPositiveInt(payload.reportReopenThreshold),
+    uninstallProxyWarn: Boolean(payload.uninstallProxyWarn)
+  };
+
+  if (!isValidTrustThresholds(parsed)) {
+    throw new Error("Invalid trust threshold values.");
+  }
+  await chrome.storage.local.set({ [TRUST_THRESHOLDS_KEY]: parsed });
+  return parsed;
+}
+
+async function getTrustTrend() {
+  const [data, thresholds] = await Promise.all([
+    chrome.storage.local.get([TRUST_TREND_KEY]),
+    getTrustThresholds()
+  ]);
+  if (!Array.isArray(data[TRUST_TREND_KEY])) {
+    return { recent: [], warnings: [], windows: {}, directions: {}, thresholds };
+  }
+
+  const cleaned = sanitizeTrustTrend(data[TRUST_TREND_KEY]);
+  const recent = cleaned.slice(-10);
+  const recent5 = cleaned.slice(-5);
   const latest = recent[recent.length - 1];
+  const previous = recent.length > 1 ? recent[recent.length - 2] : null;
   const warnings = [];
 
   if (latest) {
-    if (latest.negativeFeedbackCount >= 3) {
-      warnings.push("Negative feedback count reached threshold (>=3).");
+    if (latest.negativeFeedbackCount >= thresholds.negativeFeedbackThreshold) {
+      warnings.push(`Negative feedback count reached threshold (>=${thresholds.negativeFeedbackThreshold}).`);
     }
-    if (latest.sectionDisablementCount >= 3) {
-      warnings.push("Section disablement count reached threshold (>=3).");
+    if (latest.sectionDisablementCount >= thresholds.sectionDisablementThreshold) {
+      warnings.push(`Section disablement count reached threshold (>=${thresholds.sectionDisablementThreshold}).`);
     }
-    if (latest.uninstallProxyFlag) {
+    if (latest.reportReopenCount >= thresholds.reportReopenThreshold) {
+      warnings.push(`Report reopen count reached threshold (>=${thresholds.reportReopenThreshold}).`);
+    }
+    if (thresholds.uninstallProxyWarn && latest.uninstallProxyFlag) {
       warnings.push("Uninstall proxy flag is enabled.");
     }
   }
 
-  return { recent, warnings };
+  return {
+    recent,
+    warnings,
+    thresholds,
+    windows: {
+      last5: summarizeTrendWindow(recent5),
+      last10: summarizeTrendWindow(recent)
+    },
+    directions: computeTrustDirections(previous, latest)
+  };
 }
 
 async function appendTrustTrend(metrics) {
   const data = await chrome.storage.local.get([TRUST_TREND_KEY]);
   const trend = Array.isArray(data[TRUST_TREND_KEY]) ? data[TRUST_TREND_KEY] : [];
-  trend.push({
+  const entry = {
     timestamp: metrics.updatedAt,
     negativeFeedbackCount: metrics.negativeFeedbackCount,
     sectionDisablementCount: metrics.sectionDisablementCount,
     reportReopenCount: metrics.reportReopenCount,
     uninstallProxyFlag: metrics.uninstallProxyFlag
-  });
+  };
+  const latest = trend[trend.length - 1];
+  if (latest && isSameTrendEntry(latest, entry)) {
+    return;
+  }
+  trend.push(entry);
   while (trend.length > 50) {
     trend.shift();
   }
-  await chrome.storage.local.set({ [TRUST_TREND_KEY]: trend });
+  const cleaned = sanitizeTrustTrend(trend);
+  await chrome.storage.local.set({ [TRUST_TREND_KEY]: cleaned });
+}
+
+function isSameTrendEntry(a, b) {
+  return (
+    Number(a.negativeFeedbackCount) === Number(b.negativeFeedbackCount) &&
+    Number(a.sectionDisablementCount) === Number(b.sectionDisablementCount) &&
+    Number(a.reportReopenCount) === Number(b.reportReopenCount) &&
+    Boolean(a.uninstallProxyFlag) === Boolean(b.uninstallProxyFlag)
+  );
+}
+
+function sanitizeTrustTrend(entries) {
+  const safe = Array.isArray(entries) ? entries : [];
+  const normalized = safe
+    .filter((entry) => entry && typeof entry === "object")
+    .map((entry) => ({
+      timestamp: new Date(entry.timestamp || Date.now()).toISOString(),
+      negativeFeedbackCount: Number(entry.negativeFeedbackCount || 0),
+      sectionDisablementCount: Number(entry.sectionDisablementCount || 0),
+      reportReopenCount: Number(entry.reportReopenCount || 0),
+      uninstallProxyFlag: Boolean(entry.uninstallProxyFlag)
+    }))
+    .filter((entry) => Number.isFinite(Date.parse(entry.timestamp)))
+    .sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
+
+  const deduped = [];
+  for (const entry of normalized) {
+    const last = deduped[deduped.length - 1];
+    if (last && Date.parse(last.timestamp) === Date.parse(entry.timestamp) && isSameTrendEntry(last, entry)) {
+      continue;
+    }
+    deduped.push(entry);
+  }
+  return deduped.slice(-50);
+}
+
+function summarizeTrendWindow(entries) {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return {
+      sampleSize: 0,
+      maxNegativeFeedback: 0,
+      maxSectionDisablement: 0,
+      maxReportReopen: 0
+    };
+  }
+
+  return {
+    sampleSize: entries.length,
+    maxNegativeFeedback: Math.max(...entries.map((item) => Number(item.negativeFeedbackCount || 0))),
+    maxSectionDisablement: Math.max(...entries.map((item) => Number(item.sectionDisablementCount || 0))),
+    maxReportReopen: Math.max(...entries.map((item) => Number(item.reportReopenCount || 0)))
+  };
+}
+
+function computeTrustDirections(previous, latest) {
+  if (!previous || !latest) {
+    return {
+      negativeFeedback: "stable",
+      sectionDisablement: "stable",
+      reportReopen: "stable"
+    };
+  }
+  return {
+    negativeFeedback: direction(previous.negativeFeedbackCount, latest.negativeFeedbackCount),
+    sectionDisablement: direction(previous.sectionDisablementCount, latest.sectionDisablementCount),
+    reportReopen: direction(previous.reportReopenCount, latest.reportReopenCount)
+  };
+}
+
+function direction(before, after) {
+  const a = Number(before || 0);
+  const b = Number(after || 0);
+  if (b > a) return "up";
+  if (b < a) return "down";
+  return "stable";
+}
+
+function isValidTrustThresholds(input) {
+  return Boolean(
+    input &&
+      Number.isInteger(input.negativeFeedbackThreshold) &&
+      input.negativeFeedbackThreshold >= 1 &&
+      Number.isInteger(input.sectionDisablementThreshold) &&
+      input.sectionDisablementThreshold >= 1 &&
+      Number.isInteger(input.reportReopenThreshold) &&
+      input.reportReopenThreshold >= 1 &&
+      typeof input.uninstallProxyWarn === "boolean"
+  );
+}
+
+function toPositiveInt(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return -1;
+  }
+  return Math.max(1, Math.floor(parsed));
 }
