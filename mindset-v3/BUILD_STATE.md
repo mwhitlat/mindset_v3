@@ -1,6 +1,6 @@
 # BUILD STATE
 
-- Current Phase: Maturity Phase 5 - Exposure Symmetry Hardening and Audit
+- Current Phase: Maturity Phase 6 - Process Discipline and Red-Team Kickoff
 - Phase Status: Ready to Start
 - Completed Tasks:
   - Created Manifest v3 extension skeleton (`manifest.json`)
@@ -75,8 +75,15 @@
   - Added Maturity Phase 4 validation runbook (`MATURITY_PHASE4_VALIDATION.md`)
   - Closed Maturity Phase 4 with DoD verification (`MATURITY_PHASE4_DONE.md`)
   - Created Maturity Phase 5 build envelope aligned to Week 5 of maturity plan (`# Mindset – Maturity Phase 5 Build Envelope.md`)
+  - Tightened exposure symmetry with deterministic per-tag balancing and stable ordering (`background.js`)
+  - Added automated symmetry checks for determinism, count balance, and ordering regression (`scripts/phase1-smoke-v3.mjs`)
+  - Added symmetry audit artifact with sample sets and expected/observed behavior (`SYMMETRY_AUDIT.md`)
+  - Added Maturity Phase 5 validation runbook (`MATURITY_PHASE5_VALIDATION.md`)
+  - Refined exposure relevance filtering to suppress non-topical auth/internal domains (`background.js`, `popup.js`)
+  - Closed Maturity Phase 5 with DoD verification (`MATURITY_PHASE5_DONE.md`)
+  - Created Maturity Phase 6 build envelope aligned to Week 6 of maturity plan (`# Mindset – Maturity Phase 6 Build Envelope.md`)
 - Next Atomic Task:
-  - Start Maturity Phase 5 Task 1: tighten deterministic exposure symmetry rules and add symmetry audit artifact scaffold.
+  - Start Maturity Phase 6 Task 1: create learning/revision log template + first entry and escalation protocol template.
 - Known Issues:
   - `MINDSET_ACTIVE_CHARTER.md` currently describes Phase 6, so Phase 1 scope is anchored primarily by Build Envelope + Roadmap in this workspace.
   - Build Envelope references deterministic LLM prompting, but implementation is intentionally local-only per operator direction.

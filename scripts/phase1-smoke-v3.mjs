@@ -644,6 +644,73 @@ try {
     assert(sandboxConfig.variant === "replay_focus", "Sandbox variant did not persist.");
   });
 
+  await runCheck("Keeps exposure symmetry deterministic and count-balanced", async () => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`, { waitUntil: "domcontentloaded" });
+
+    const result = await page.evaluate(async () => {
+      await chrome.storage.local.set({
+        latestWeeklyReport: {
+          summary: {
+            topDomains: [
+              { domain: "news.example.com", visits: 8 },
+              { domain: "finance.example.com", visits: 6 },
+              { domain: "reddit.com", visits: 5 },
+              { domain: "youtube.com", visits: 4 }
+            ]
+          }
+        }
+      });
+
+      const first = await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: "get-exposure-suggestions" }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          if (!response || !response.ok) {
+            reject(new Error(response?.error || "get-exposure-suggestions failed"));
+            return;
+          }
+          resolve(response.suggestions);
+        });
+      });
+
+      const second = await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: "get-exposure-suggestions" }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          if (!response || !response.ok) {
+            reject(new Error(response?.error || "get-exposure-suggestions failed"));
+            return;
+          }
+          resolve(response.suggestions);
+        });
+      });
+
+      return { first, second };
+    });
+
+    assert(Array.isArray(result.first), "First exposure response is not an array.");
+    assert(result.first.length === 4, "Exposure response did not include four suggestion rows.");
+    assert(
+      JSON.stringify(result.first) === JSON.stringify(result.second),
+      "Exposure suggestions were not deterministic across repeated runs."
+    );
+
+    const counts = result.first.map((item) => Array.isArray(item.suggestions) ? item.suggestions.length : -1);
+    assert(counts.every((count) => count === 3), "Exposure suggestions were not count-balanced to 3 per row.");
+
+    const domains = result.first.map((item) => item.sourceDomain);
+    const sortedDomains = [...domains].sort((a, b) => String(a).localeCompare(String(b)));
+    assert(
+      JSON.stringify(domains) === JSON.stringify(sortedDomains),
+      "Exposure rows are not deterministically ordered by source domain."
+    );
+  });
+
   await runCheck("Runs density checks", async () => {
     const page = await context.newPage();
     await page.goto(`chrome-extension://${extensionId}/popup.html`, { waitUntil: "domcontentloaded" });

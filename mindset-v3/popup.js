@@ -419,7 +419,7 @@ function renderExposureSuggestions(items) {
   if (!Array.isArray(items) || items.length === 0) {
     const empty = document.createElement("p");
     empty.className = "label";
-    empty.textContent = "Generate a report to view adjacent perspective options.";
+    empty.textContent = "No topical exposure suggestions available for current domains.";
     exposureBlock.appendChild(empty);
     return;
   }

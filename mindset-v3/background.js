@@ -35,6 +35,19 @@ const TAG_ADJACENT_DOMAINS = {
   video: ["vimeo.com", "pbs.org", "ted.com"],
   default: ["wikipedia.org", "reuters.com", "bbc.com"]
 };
+const NON_TOPICAL_DOMAIN_PATTERNS = [
+  /^accounts\./i,
+  /^mail\./i,
+  /^calendar\./i,
+  /^docs\./i,
+  /^drive\./i,
+  /^localhost$/i,
+  /\.local$/i,
+  /\.lan$/i,
+  /\.internal$/i,
+  /\.ts\.net$/i,
+  /^[0-9]{1,3}(\.[0-9]{1,3}){3}$/
+];
 const INVARIANT_RULESET_VERSION = "calibration-v1.2";
 const INVARIANT_HARD_VIOLATION_RULES = [
   { id: "directive_you_should", pattern: /\byou should\b/gi, label: 'Directive phrase "you should"' },
@@ -857,36 +870,76 @@ async function getExposureSuggestions() {
     return [];
   }
 
-  const buckets = report.summary.topDomains.slice(0, 4).map((item) => {
-    const sourceDomain = String(item.domain || "unknown");
-    const tag = classifyDomainTag(sourceDomain);
-    const adjacent = TAG_ADJACENT_DOMAINS[tag] || TAG_ADJACENT_DOMAINS.default;
-    const suggestions = adjacent.filter((domain) => domain !== sourceDomain).slice(0, 3);
-    return {
-      sourceDomain,
-      tag,
-      framing: "Here are adjacent perspectives on this topic.",
-      suggestions
-    };
-  });
-
-  // Tighten symmetry by keeping the same suggestion count across rows and stable ordering.
-  const normalizedCount = Math.max(
-    1,
-    Math.min(
-      3,
-      ...buckets.map((item) => item.suggestions.length).filter((count) => Number.isFinite(count) && count > 0)
-    )
-  );
+  const TARGET_SUGGESTION_COUNT = 3;
+  const buckets = report.summary.topDomains
+    .slice(0, 8)
+    .map((item) => {
+      const sourceDomain = String(item.domain || "unknown");
+      if (!isTopicalDomain(sourceDomain)) {
+        return null;
+      }
+      const tag = classifyDomainTag(sourceDomain);
+      const suggestions = buildSymmetricSuggestions(sourceDomain, tag, TARGET_SUGGESTION_COUNT);
+      return {
+        sourceDomain,
+        tag,
+        framing: "Here are adjacent perspectives on this topic.",
+        suggestions
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 4);
 
   return buckets
     .map((item) => ({
       sourceDomain: item.sourceDomain,
       tag: item.tag,
       framing: item.framing,
-      suggestions: item.suggestions.slice(0, normalizedCount).sort()
+      suggestions: item.suggestions
     }))
     .sort((a, b) => a.sourceDomain.localeCompare(b.sourceDomain));
+}
+
+function buildSymmetricSuggestions(sourceDomain, tag, targetCount) {
+  const normalizedSource = String(sourceDomain || "").toLowerCase();
+  const baseList = normalizeSuggestionList(TAG_ADJACENT_DOMAINS[tag] || TAG_ADJACENT_DOMAINS.default);
+  const fallbackList = normalizeSuggestionList(TAG_ADJACENT_DOMAINS.default);
+  const output = [];
+
+  for (const domain of [...baseList, ...fallbackList]) {
+    const normalized = String(domain || "").toLowerCase();
+    if (!normalized || normalized === normalizedSource) {
+      continue;
+    }
+    if (output.includes(normalized)) {
+      continue;
+    }
+    output.push(normalized);
+    if (output.length >= targetCount) {
+      break;
+    }
+  }
+
+  return output;
+}
+
+function normalizeSuggestionList(items) {
+  const list = Array.isArray(items) ? items : [];
+  return [...new Set(list.map((item) => String(item || "").trim().toLowerCase()).filter(Boolean))].sort();
+}
+
+function isTopicalDomain(domain) {
+  const normalized = String(domain || "").trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  for (const pattern of NON_TOPICAL_DOMAIN_PATTERNS) {
+    pattern.lastIndex = 0;
+    if (pattern.test(normalized)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function classifyDomainTag(domain) {
