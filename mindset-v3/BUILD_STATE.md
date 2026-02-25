@@ -1,6 +1,6 @@
 # BUILD STATE
 
-- Current Phase: Maturity Phase 1 - User-Facing Governance Lifecycle
+- Current Phase: Maturity Phase 2 - Structured Review and Rollback Clarity
 - Phase Status: Complete (Stop condition reached)
 - Completed Tasks:
   - Created Manifest v3 extension skeleton (`manifest.json`)
@@ -50,8 +50,18 @@
   - Added popup approve/reject actions for pending proposals in lifecycle list (`popup.js`)
   - Added automated UI-flow validation for create/approve/reject proposal lifecycle (`scripts/phase1-smoke-v3.mjs`)
   - Added Maturity Phase 1 validation runbook (`MATURITY_PHASE1_VALIDATION.md`)
+  - Created Maturity Phase 2 build envelope aligned to Week 2 of maturity plan (`# Mindset – Maturity Phase 2 Build Envelope.md`)
+  - Added explicit maturity continuity rule to long-charter plan (`LONG_CHARTER_MATURITY_PLAN.md`)
+  - Added structured proposal comparison reports and `requiresApproval` marker logic (`background.js`)
+  - Added rollback availability status endpoint and popup clarity UI (`background.js`, `popup.html`, `popup.js`)
+  - Added governance row comparison summaries and marker display in lifecycle panel (`popup.js`)
+  - Added automated coverage for comparison-report/approval-marker behavior (`scripts/phase1-smoke-v3.mjs`)
+  - Updated governance proposal schema to include maturity fields (`governance-proposal-schema.json`)
+  - Added Maturity Phase 2 validation runbook (`MATURITY_PHASE2_VALIDATION.md`)
+  - Closed Maturity Phase 2 with DoD verification (`MATURITY_PHASE2_DONE.md`)
+  - Created Maturity Phase 3 build envelope aligned to Week 3 of maturity plan (`# Mindset – Maturity Phase 3 Build Envelope.md`)
 - Next Atomic Task:
-  - None. Maturity Phase 1 is closed.
+  - Start Maturity Phase 3 Task 1: implement trust threshold configuration and trend-window diagnostics.
 - Known Issues:
   - `MINDSET_ACTIVE_CHARTER.md` currently describes Phase 6, so Phase 1 scope is anchored primarily by Build Envelope + Roadmap in this workspace.
   - Build Envelope references deterministic LLM prompting, but implementation is intentionally local-only per operator direction.

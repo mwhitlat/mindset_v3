@@ -39,6 +39,20 @@
         "rejected",
         "rolled_back"
       ]
+    },
+    "requiresApproval": {
+      "type": "boolean"
+    },
+    "reviewedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "rolledBackSnapshotId": {
+      "type": "string"
+    },
+    "comparisonReport": {
+      "type": "object",
+      "additionalProperties": true
     }
   }
 }

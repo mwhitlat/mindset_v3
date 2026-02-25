@@ -10,6 +10,7 @@ const proposalSummaryInput = document.getElementById("proposalSummaryInput");
 const createProposalButton = document.getElementById("createProposalButton");
 const rollbackButton = document.getElementById("rollbackButton");
 const governanceStatusText = document.getElementById("governanceStatusText");
+const rollbackStatusText = document.getElementById("rollbackStatusText");
 const proposalLogList = document.getElementById("proposalLogList");
 const createReplaySnapshotButton = document.getElementById("createReplaySnapshotButton");
 const runReplayDiffButton = document.getElementById("runReplayDiffButton");
@@ -117,6 +118,7 @@ rollbackButton.addEventListener("click", async () => {
     const config = await sendRuntimeMessage({ type: "get-governance-config" });
     renderGovernanceConfig(config);
     await loadGovernanceProposals();
+    await loadRollbackStatus();
   } catch (error) {
     setGovernanceStatus(`Rollback failed: ${error.message}`);
   } finally {
@@ -207,6 +209,7 @@ async function loadLatestReport() {
   const data = await chrome.storage.local.get(["latestWeeklyReport", "lastPerformanceMetrics"]);
   await loadGovernanceConfig();
   await loadGovernanceProposals();
+  await loadRollbackStatus();
   await loadReplaySnapshots();
   await loadSandboxConfig();
   await loadTrustProxies();
@@ -566,6 +569,20 @@ async function loadGovernanceProposals() {
   }
 }
 
+async function loadRollbackStatus() {
+  try {
+    const status = await sendRuntimeMessage({ type: "get-rollback-status" });
+    rollbackButton.disabled = !status.available;
+    if (status.available) {
+      rollbackStatusText.textContent = `Rollback target: ${status.snapshotId} (${new Date(status.capturedAt).toLocaleString()})`;
+    } else {
+      rollbackStatusText.textContent = "No approved snapshot available yet.";
+    }
+  } catch (error) {
+    rollbackStatusText.textContent = `Rollback status failed: ${error.message}`;
+  }
+}
+
 function renderGovernanceProposals(entries) {
   proposalLogList.textContent = "";
   if (!Array.isArray(entries) || entries.length === 0) {
@@ -588,6 +605,9 @@ function renderGovernanceProposals(entries) {
     const status = document.createElement("p");
     status.className = "label";
     status.textContent = `Status: ${entry.status || "unknown"}`;
+    if (entry.requiresApproval) {
+      status.textContent += " | Requires Approval";
+    }
 
     const time = document.createElement("p");
     time.className = "label";
@@ -595,6 +615,14 @@ function renderGovernanceProposals(entries) {
     time.textContent = `At: ${timeText}`;
 
     row.append(summary, status, time);
+
+    if (entry.comparisonReport?.summary) {
+      const compare = document.createElement("p");
+      compare.className = "label";
+      compare.textContent =
+        `Compare: governance changes=${entry.comparisonReport.summary.governanceChangeCount}, sandbox changes=${entry.comparisonReport.summary.sandboxChangeCount}`;
+      row.appendChild(compare);
+    }
 
     if (entry.status === "pending") {
       const actions = document.createElement("div");
@@ -631,6 +659,7 @@ async function applyProposalStatus(proposalId, status) {
       payload: { proposalId, status }
     });
     await loadGovernanceProposals();
+    await loadRollbackStatus();
     setGovernanceStatus(`Proposal ${status}.`);
   } catch (error) {
     setGovernanceStatus(`Proposal update failed: ${error.message}`);
@@ -850,6 +879,10 @@ function sendRuntimeMessage(message) {
       }
       if ("trend" in response) {
         resolve(response.trend);
+        return;
+      }
+      if ("status" in response) {
+        resolve(response.status);
         return;
       }
       resolve(response);

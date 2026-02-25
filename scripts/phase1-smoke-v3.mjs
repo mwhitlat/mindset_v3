@@ -127,6 +127,61 @@ try {
     assert(entries.some((item) => item.id === entry.id), "Appended proposal was not found in proposal log.");
   });
 
+  await runCheck("Produces comparison report and requires_approval marker", async () => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`, { waitUntil: "domcontentloaded" });
+
+    const marked = await page.evaluate(async () => {
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          {
+            type: "append-governance-proposal",
+            payload: {
+              proposedChangeSummary: "Structural sandbox change proposal",
+              triggeringChecks: ["structural-check"],
+              proposedSandboxConfig: { enabled: true, variant: "replay_focus" }
+            }
+          },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+              return;
+            }
+            if (!response || !response.ok) {
+              reject(new Error(response?.error || "append-governance-proposal failed"));
+              return;
+            }
+            resolve(response.entry);
+          }
+        );
+      });
+    });
+
+    assert(marked.requiresApproval === true, "Structural proposal did not set requiresApproval.");
+    assert(
+      typeof marked.comparisonReport?.summary?.sandboxChangeCount === "number",
+      "Comparison report summary missing sandboxChangeCount."
+    );
+
+    const rollbackStatus = await page.evaluate(async () => {
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: "get-rollback-status" }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          if (!response || !response.ok) {
+            reject(new Error(response?.error || "get-rollback-status failed"));
+            return;
+          }
+          resolve(response.status);
+        });
+      });
+    });
+
+    assert(typeof rollbackStatus.available === "boolean", "Rollback status missing boolean availability.");
+  });
+
   await runCheck("Creates and transitions proposals from popup UI controls", async () => {
     const page = await context.newPage();
     await page.goto(`chrome-extension://${extensionId}/popup.html`, { waitUntil: "domcontentloaded" });
@@ -380,6 +435,13 @@ try {
         );
       });
     }, pendingEntry.id);
+
+    const rollbackEnabled = await page.evaluate(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const button = document.querySelector("#rollbackButton");
+      return button ? !button.disabled : false;
+    });
+    assert(rollbackEnabled === true, "Rollback button stayed disabled after approved snapshot.");
 
     await page.evaluate(async () => {
       await new Promise((resolve, reject) => {

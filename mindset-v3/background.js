@@ -119,6 +119,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === "get-rollback-status") {
+    getRollbackStatus()
+      .then((status) => sendResponse({ ok: true, status }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
   if (message.type === "get-trust-proxies") {
     getTrustProxies()
       .then((metrics) => sendResponse({ ok: true, metrics }))
@@ -428,7 +435,7 @@ async function ensureProposalLog() {
 
 async function appendGovernanceProposal(payload) {
   const config = await getGovernanceConfig();
-  const entry = createGovernanceProposalEntry(payload);
+  const entry = await createGovernanceProposalEntry(payload);
   if (config.review_required && entry.status !== "pending") {
     throw new Error("Manual review is required. New proposals must start as pending.");
   }
@@ -552,6 +559,16 @@ async function rollbackToLastApprovedSnapshot() {
   };
 }
 
+async function getRollbackStatus() {
+  const data = await chrome.storage.local.get([STABLE_SNAPSHOT_KEY]);
+  const snapshot = data[STABLE_SNAPSHOT_KEY] || null;
+  return {
+    available: Boolean(snapshot && snapshot.snapshotId),
+    snapshotId: snapshot?.snapshotId || null,
+    capturedAt: snapshot?.capturedAt || null
+  };
+}
+
 async function appendGovernanceLogEntry(entry) {
   const entries = await getGovernanceProposalLog();
   entries.push(entry);
@@ -626,7 +643,7 @@ function isValidTrustProxies(input) {
   );
 }
 
-function createGovernanceProposalEntry(payload) {
+async function createGovernanceProposalEntry(payload) {
   if (!payload || typeof payload !== "object") {
     throw new Error("Invalid proposal payload.");
   }
@@ -650,13 +667,67 @@ function createGovernanceProposalEntry(payload) {
     throw new Error("Invalid proposal status.");
   }
 
+  const comparisonReport = await buildComparisonReport(payload);
+  const requiresApproval = Boolean(comparisonReport.structuralChangeDetected || payload.requiresApproval === true);
+
   return {
     id: `proposal_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     timestamp: new Date().toISOString(),
     proposedChangeSummary,
     triggeringChecks,
-    status
+    status,
+    requiresApproval,
+    comparisonReport
   };
+}
+
+async function buildComparisonReport(payload) {
+  const [governanceConfig, sandboxConfig] = await Promise.all([getGovernanceConfig(), getSandboxConfig()]);
+  const proposedGovernanceConfig = payload.proposedGovernanceConfig || governanceConfig;
+  const proposedSandboxConfig = payload.proposedSandboxConfig || sandboxConfig;
+
+  const governanceDiff = diffFlatObject(governanceConfig, proposedGovernanceConfig);
+  const sandboxDiff = diffFlatObject(sandboxConfig, proposedSandboxConfig);
+  const structuralSections = Array.isArray(payload.structuralSections)
+    ? payload.structuralSections.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+  const structuralChangeDetected = governanceDiff.changedKeys.length > 0 || sandboxDiff.changedKeys.length > 0;
+
+  return {
+    baseline: {
+      governanceConfig,
+      sandboxConfig
+    },
+    proposed: {
+      governanceConfig: proposedGovernanceConfig,
+      sandboxConfig: proposedSandboxConfig
+    },
+    structuralDiff: {
+      governanceChangedKeys: governanceDiff.changedKeys,
+      sandboxChangedKeys: sandboxDiff.changedKeys,
+      structuralSections
+    },
+    structuralChangeDetected,
+    summary: {
+      governanceChangeCount: governanceDiff.changedKeys.length,
+      sandboxChangeCount: sandboxDiff.changedKeys.length
+    }
+  };
+}
+
+function diffFlatObject(beforeObj, afterObj) {
+  const before = beforeObj && typeof beforeObj === "object" ? beforeObj : {};
+  const after = afterObj && typeof afterObj === "object" ? afterObj : {};
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  const changedKeys = [];
+  for (const key of keys) {
+    const beforeValue = JSON.stringify(before[key]);
+    const afterValue = JSON.stringify(after[key]);
+    if (beforeValue !== afterValue) {
+      changedKeys.push(key);
+    }
+  }
+  return { changedKeys: changedKeys.sort() };
 }
 
 async function ensureReplaySnapshots() {
