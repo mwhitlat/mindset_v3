@@ -970,6 +970,48 @@ try {
       }
     }
   });
+
+  await runCheck("Validates Phase 7 pilot stabilization artifacts", async () => {
+    const artifactChecks = [
+      {
+        file: "PILOT_ISSUES.md",
+        patterns: [
+          "# Pilot Issues",
+          "## Severity Legend",
+          "## Issue List",
+          "Severity: `",
+          "Status: `",
+          "## Critical/High Summary"
+        ]
+      },
+      {
+        file: "PILOT_CHANGE_FREEZE.md",
+        patterns: [
+          "# Pilot Change Freeze",
+          "## Frozen Categories",
+          "## Allowed Changes During Freeze",
+          "## Exception Path",
+          "ESCALATION_TEMPLATE.md"
+        ]
+      },
+      {
+        file: "RED_TEAM_LOG.md",
+        patterns: ["## Run 2026-02-25-02", "### Identity Invariant Checks", "### Findings"]
+      },
+      {
+        file: "MATURITY_PHASE7_VALIDATION.md",
+        patterns: ["# Maturity Phase 7 Validation", "## Automated", "## Manual"]
+      }
+    ];
+
+    for (const check of artifactChecks) {
+      const artifactPath = path.resolve(process.cwd(), "mindset-v3", check.file);
+      const content = await readFile(artifactPath, "utf8");
+      for (const pattern of check.patterns) {
+        assert(content.includes(pattern), `${check.file} is missing expected section: ${pattern}`);
+      }
+    }
+  });
 } finally {
   await context.close();
 }
