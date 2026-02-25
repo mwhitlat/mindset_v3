@@ -1,6 +1,6 @@
 # BUILD STATE
 
-- Current Phase: Maturity Phase 6 - Process Discipline and Red-Team Kickoff
+- Current Phase: Maturity Phase 7 - Pilot Stabilization Sprint
 - Phase Status: Ready to Start
 - Completed Tasks:
   - Created Manifest v3 extension skeleton (`manifest.json`)
@@ -82,8 +82,15 @@
   - Refined exposure relevance filtering to suppress non-topical auth/internal domains (`background.js`, `popup.js`)
   - Closed Maturity Phase 5 with DoD verification (`MATURITY_PHASE5_DONE.md`)
   - Created Maturity Phase 6 build envelope aligned to Week 6 of maturity plan (`# Mindset – Maturity Phase 6 Build Envelope.md`)
+  - Added learning/revision workflow artifact with initial entry (`LEARNING_LOG.md`)
+  - Added operator escalation protocol template (`ESCALATION_TEMPLATE.md`)
+  - Added red-team protocol and initial run log (`RED_TEAM_PROTOCOL.md`, `RED_TEAM_LOG.md`)
+  - Added Maturity Phase 6 validation runbook (`MATURITY_PHASE6_VALIDATION.md`)
+  - Added automated artifact-presence gate for Phase 6 process deliverables (`scripts/phase1-smoke-v3.mjs`)
+  - Closed Maturity Phase 6 with DoD verification (`MATURITY_PHASE6_DONE.md`)
+  - Created Maturity Phase 7 build envelope aligned to Week 7 of maturity plan (`# Mindset – Maturity Phase 7 Build Envelope.md`)
 - Next Atomic Task:
-  - Start Maturity Phase 6 Task 1: create learning/revision log template + first entry and escalation protocol template.
+  - Start Maturity Phase 7 Task 1: create pilot issue backlog and change freeze policy artifacts.
 - Known Issues:
   - `MINDSET_ACTIVE_CHARTER.md` currently describes Phase 6, so Phase 1 scope is anchored primarily by Build Envelope + Roadmap in this workspace.
   - Build Envelope references deterministic LLM prompting, but implementation is intentionally local-only per operator direction.

@@ -1,5 +1,6 @@
 import { setTimeout as delay } from "node:timers/promises";
 import path from "node:path";
+import { readFile } from "node:fs/promises";
 
 const installHint = [
   "Playwright is optional and not installed.",
@@ -935,6 +936,39 @@ try {
       strictResult.first.rulesetVersion === strictResult.second.rulesetVersion,
       "Invariant ruleset version changed unexpectedly between repeated runs."
     );
+  });
+
+  await runCheck("Validates Phase 6 process artifacts", async () => {
+    const artifactChecks = [
+      {
+        file: "LEARNING_LOG.md",
+        patterns: ["# Learning Log", "- Date:", "- Change summary:", "- Trigger:", "- Decision:", "- Validation evidence:"]
+      },
+      {
+        file: "ESCALATION_TEMPLATE.md",
+        patterns: ["# Escalation Template", "## Risk Description", "## Option 1", "## Option 2", "## Recommended Option"]
+      },
+      {
+        file: "RED_TEAM_PROTOCOL.md",
+        patterns: ["# Red Team Protocol", "## Cadence", "## Categories", "## Run Procedure"]
+      },
+      {
+        file: "RED_TEAM_LOG.md",
+        patterns: ["# Red Team Log", "## Run", "### Findings"]
+      },
+      {
+        file: "MATURITY_PHASE6_VALIDATION.md",
+        patterns: ["# Maturity Phase 6 Validation", "## Automated", "## Manual"]
+      }
+    ];
+
+    for (const check of artifactChecks) {
+      const artifactPath = path.resolve(process.cwd(), "mindset-v3", check.file);
+      const content = await readFile(artifactPath, "utf8");
+      for (const pattern of check.patterns) {
+        assert(content.includes(pattern), `${check.file} is missing expected section: ${pattern}`);
+      }
+    }
   });
 } finally {
   await context.close();
