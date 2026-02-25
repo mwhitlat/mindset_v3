@@ -513,20 +513,33 @@ function renderInvariantCheck(result) {
   header.textContent = `Status: ${String(result.status || "unknown").toUpperCase()}`;
   invariantBlock.appendChild(header);
 
-  if (!Array.isArray(result.warnings) || result.warnings.length === 0) {
+  const violations = Array.isArray(result.violations) ? result.violations : [];
+  const warnings = Array.isArray(result.warnings) ? result.warnings : [];
+
+  if (violations.length === 0 && warnings.length === 0) {
     const ok = document.createElement("p");
     ok.className = "label";
-    ok.textContent = "No invariant warnings.";
+    ok.textContent = "No invariant warnings or violations.";
     invariantBlock.appendChild(ok);
     return;
   }
 
-  for (const warning of result.warnings) {
+  for (const violation of violations) {
     const row = document.createElement("div");
     row.className = "log-item";
     const line = document.createElement("p");
     line.className = "label";
-    line.textContent = warning;
+    line.textContent = `Violation: ${violation}`;
+    row.appendChild(line);
+    invariantBlock.appendChild(row);
+  }
+
+  for (const warning of warnings) {
+    const row = document.createElement("div");
+    row.className = "log-item";
+    const line = document.createElement("p");
+    line.className = "label";
+    line.textContent = `Warning: ${warning}`;
     row.appendChild(line);
     invariantBlock.appendChild(row);
   }

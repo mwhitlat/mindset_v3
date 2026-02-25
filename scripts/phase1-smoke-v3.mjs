@@ -765,6 +765,110 @@ try {
     assert(typeof trend.windows?.last10?.sampleSize === "number", "Trend window last10 missing.");
     assert(typeof trend.directions?.negativeFeedback === "string", "Trend directions missing.");
   });
+
+  await runCheck("Calibrates invariant checks with deterministic outputs", async () => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`, { waitUntil: "domcontentloaded" });
+
+    const cleanResult = await page.evaluate(async () => {
+      await chrome.storage.local.set({
+        latestWeeklyReport: {
+          reflection: [
+            "Distribution Overview",
+            "This report captures browsing distribution only.",
+            "",
+            "Frequency Patterns",
+            "The summary is used to improve instrumentation diagnostics.",
+            "",
+            "Notable Concentrations",
+            "No concentration trend is asserted."
+          ].join("\n")
+        }
+      });
+
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: "run-invariant-check" }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          if (!response || !response.ok) {
+            reject(new Error(response?.error || "run-invariant-check failed"));
+            return;
+          }
+          resolve(response.result);
+        });
+      });
+    });
+
+    assert(cleanResult.status === "pass", "Neutral reflection should pass calibrated invariant check.");
+    assert(Array.isArray(cleanResult.warnings) && cleanResult.warnings.length === 0, "Neutral reflection created warnings.");
+    assert(
+      Array.isArray(cleanResult.violations) && cleanResult.violations.length === 0,
+      "Neutral reflection created violations."
+    );
+
+    const strictResult = await page.evaluate(async () => {
+      await chrome.storage.local.set({
+        latestWeeklyReport: {
+          reflection: [
+            "Distribution Overview",
+            "You should reduce visits to high-frequency domains.",
+            "",
+            "Frequency Patterns",
+            "Score: 8",
+            "",
+            "Notable Concentrations",
+            "This section records concentration."
+          ].join("\n")
+        }
+      });
+
+      const first = await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: "run-invariant-check" }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          if (!response || !response.ok) {
+            reject(new Error(response?.error || "run-invariant-check failed"));
+            return;
+          }
+          resolve(response.result);
+        });
+      });
+
+      const second = await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: "run-invariant-check" }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          if (!response || !response.ok) {
+            reject(new Error(response?.error || "run-invariant-check failed"));
+            return;
+          }
+          resolve(response.result);
+        });
+      });
+
+      return { first, second };
+    });
+
+    assert(strictResult.first.status === "fail", "Directive/scoring reflection should fail invariant check.");
+    assert(
+      Array.isArray(strictResult.first.violations) && strictResult.first.violations.length >= 2,
+      "Strict violation reflection did not produce expected violation entries."
+    );
+    assert(
+      JSON.stringify(strictResult.first.violations) === JSON.stringify(strictResult.second.violations),
+      "Invariant violation output was not deterministic across repeated runs."
+    );
+    assert(
+      strictResult.first.rulesetVersion === strictResult.second.rulesetVersion,
+      "Invariant ruleset version changed unexpectedly between repeated runs."
+    );
+  });
 } finally {
   await context.close();
 }

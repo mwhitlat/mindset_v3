@@ -1,7 +1,7 @@
 # BUILD STATE
 
-- Current Phase: Maturity Phase 3 - Trust Thresholds and Trend Diagnostics
-- Phase Status: Complete (Stop condition reached)
+- Current Phase: Maturity Phase 5 - Exposure Symmetry Hardening and Audit
+- Phase Status: Ready to Start
 - Completed Tasks:
   - Created Manifest v3 extension skeleton (`manifest.json`)
   - Implemented local metadata capture via content script (`content.js`)
@@ -68,9 +68,16 @@
   - Added Maturity Phase 3 validation runbook (`MATURITY_PHASE3_VALIDATION.md`)
   - Closed Maturity Phase 3 with DoD verification (`MATURITY_PHASE3_DONE.md`)
   - Created Maturity Phase 4 build envelope with charter mapping and completion estimate (`# Mindset – Maturity Phase 4 Build Envelope.md`)
+  - Tuned invariant calibration to reduce false positives while preserving strict prohibited framing rejection (`background.js`)
+  - Added invariant result rendering for both warnings and strict violations in popup diagnostics (`popup.js`)
+  - Expanded automated calibration coverage for neutral regression, strict rejection, and deterministic repeated outputs (`scripts/phase1-smoke-v3.mjs`)
+  - Added calibration decision log artifact (`CALIBRATION_LOG.md`)
+  - Added Maturity Phase 4 validation runbook (`MATURITY_PHASE4_VALIDATION.md`)
+  - Closed Maturity Phase 4 with DoD verification (`MATURITY_PHASE4_DONE.md`)
+  - Created Maturity Phase 5 build envelope aligned to Week 5 of maturity plan (`# Mindset – Maturity Phase 5 Build Envelope.md`)
 - Next Atomic Task:
-  - Start Maturity Phase 4 Task 1: tune invariant checks and add calibration decision log with expanded tests.
+  - Start Maturity Phase 5 Task 1: tighten deterministic exposure symmetry rules and add symmetry audit artifact scaffold.
 - Known Issues:
   - `MINDSET_ACTIVE_CHARTER.md` currently describes Phase 6, so Phase 1 scope is anchored primarily by Build Envelope + Roadmap in this workspace.
   - Build Envelope references deterministic LLM prompting, but implementation is intentionally local-only per operator direction.
-- Date of Last Update: 2026-02-22
+- Date of Last Update: 2026-02-25

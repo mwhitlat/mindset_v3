@@ -35,7 +35,24 @@ const TAG_ADJACENT_DOMAINS = {
   video: ["vimeo.com", "pbs.org", "ted.com"],
   default: ["wikipedia.org", "reuters.com", "bbc.com"]
 };
-const REFLECTION_PROHIBITED_PHRASES = ["you should", "to improve", "must", "need to", "should avoid"];
+const INVARIANT_RULESET_VERSION = "calibration-v1.2";
+const INVARIANT_HARD_VIOLATION_RULES = [
+  { id: "directive_you_should", pattern: /\byou should\b/gi, label: 'Directive phrase "you should"' },
+  { id: "directive_you_need_to", pattern: /\byou need to\b/gi, label: 'Directive phrase "you need to"' },
+  { id: "directive_you_must", pattern: /\byou must\b/gi, label: 'Directive phrase "you must"' },
+  { id: "directive_you_ought_to", pattern: /\byou ought to\b/gi, label: 'Directive phrase "you ought to"' },
+  { id: "nudging_next_week", pattern: /\bnext week[, ]+(try|focus on|avoid|do)\b/gi, label: "Behavioral nudging phrase" },
+  { id: "normative_scoring", pattern: /\b(score|grade)\s*[:=]\s*[0-9]+(\.[0-9]+)?\b/gi, label: "Normative scoring marker" }
+];
+const INVARIANT_WARNING_RULES = [
+  { id: "bias_phrase", pattern: /\bto reduce bias\b/gi, label: 'Potentially advisory phrase "to reduce bias"' },
+  { id: "balance_phrase", pattern: /\bto be more balanced\b/gi, label: 'Potentially advisory phrase "to be more balanced"' }
+];
+const REQUIRED_REFLECTION_HEADINGS = [
+  "distribution overview",
+  "frequency patterns",
+  "notable concentrations"
+];
 const DEFAULT_TRUST_THRESHOLDS = {
   negativeFeedbackThreshold: 3,
   sectionDisablementThreshold: 3,
@@ -965,27 +982,45 @@ async function runInvariantCheck() {
     return {
       status: "warn",
       warnings: ["No report found for invariant check."],
+      rulesetVersion: INVARIANT_RULESET_VERSION,
       checkedAt: new Date().toISOString()
     };
   }
 
   const warnings = [];
-  const reflection = String(report.reflection || "").toLowerCase();
-  for (const phrase of REFLECTION_PROHIBITED_PHRASES) {
-    if (reflection.includes(phrase)) {
-      warnings.push(`Potentially prescriptive phrase detected: "${phrase}"`);
+  const violations = [];
+  const reflectionRaw = String(report.reflection || "");
+  const reflection = reflectionRaw.toLowerCase();
+
+  violations.push(...collectInvariantMatches(reflection, INVARIANT_HARD_VIOLATION_RULES));
+  warnings.push(...collectInvariantMatches(reflection, INVARIANT_WARNING_RULES));
+
+  for (const heading of REQUIRED_REFLECTION_HEADINGS) {
+    if (!reflection.includes(heading)) {
+      warnings.push(`Expected reflection heading missing: ${toHeadingLabel(heading)}.`);
     }
   }
 
-  if (!reflection.includes("distribution overview")) {
-    warnings.push("Expected reflection heading missing: Distribution Overview.");
-  }
-
   return {
-    status: warnings.length === 0 ? "pass" : "warn",
+    status: violations.length > 0 ? "fail" : warnings.length === 0 ? "pass" : "warn",
+    violations,
     warnings,
+    rulesetVersion: INVARIANT_RULESET_VERSION,
     checkedAt: new Date().toISOString()
   };
+}
+
+function collectInvariantMatches(text, rules) {
+  const matches = [];
+  for (const rule of rules) {
+    const pattern = rule.pattern;
+    pattern.lastIndex = 0;
+    const found = pattern.exec(text);
+    if (found && found[0]) {
+      matches.push(`${rule.label}: "${found[0]}"`);
+    }
+  }
+  return matches;
 }
 
 async function ensureTrustTrend() {
@@ -1190,4 +1225,11 @@ function toPositiveInt(value) {
     return -1;
   }
   return Math.max(1, Math.floor(parsed));
+}
+
+function toHeadingLabel(value) {
+  return value
+    .split(" ")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
